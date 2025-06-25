@@ -5,5 +5,5 @@ In development, currently not working
 <br>
 To run just type: 
 <br>
-`curl -O https://raw.githubusercontent.com/yourusername/yourrepo/main/arch-install.sh && chmod +x arch-install.sh && ./arch-install.sh`
+`curl -O https://raw.githubusercontent.com/codingMonkey2000/arch_installer/main/arch-install.sh && chmod +x arch-install.sh && ./arch-install.sh`
 
