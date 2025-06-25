@@ -100,16 +100,6 @@ mount_partitions() {
     log "Partitions mounted"
 }
 
-create_swapfile() {
-    log "Creating ${SWAP_SIZE} swapfile"
-    fallocate -l $SWAP_SIZE /mnt/swapfile
-    chmod 600 /mnt/swapfile
-    mkswap /mnt/swapfile
-    swapon /mnt/swapfile
-    echo "/swapfile none swap defaults 0 0" >> /mnt/etc/fstab
-    log "Swapfile created and activated"
-}
-
 install_base() {
     log "Installing base system"
     pacstrap /mnt base base-devel linux-lts linux-firmware amd-ucode grub efibootmgr sbctl nano networkmanager
@@ -122,6 +112,17 @@ generate_fstab() {
     log "fstab generated"
 }
 
+create_swapfile() {
+    log "Creating ${SWAP_SIZE} swapfile"
+    fallocate -l $SWAP_SIZE /mnt/swapfile
+    chmod 600 /mnt/swapfile
+    mkswap /mnt/swapfile
+    swapon /mnt/swapfile
+    # Add swapfile to fstab (fstab already exists from generate_fstab)
+    echo "/swapfile none swap defaults 0 0" >> /mnt/etc/fstab
+    log "Swapfile created and activated"
+}
+
 configure_system() {
     log "Configuring system in chroot"
 
@@ -132,8 +133,10 @@ set -e
 
 # Colors
 GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
 NC='\033[0m'
 log() { echo -e "${GREEN}[CHROOT]${NC} $1"; }
+warn() { echo -e "${YELLOW}[CHROOT-WARN]${NC} $1"; }
 
 # Timezone and clock
 log "Setting timezone"
@@ -155,7 +158,7 @@ echo "archbox" > /etc/hostname
 # Root password
 log "Setting root password"
 echo "root:password123" | chpasswd
-echo "WARNING: Default root password is 'password123' - CHANGE THIS AFTER FIRST BOOT!"
+warn "Default root password is 'password123' - CHANGE THIS AFTER FIRST BOOT!"
 
 # Install GRUB
 log "Installing GRUB"
@@ -184,23 +187,43 @@ mkinitcpio -P
 # Secure Boot setup
 log "Setting up Secure Boot"
 sbctl create-keys
-sbctl enroll-keys || {
-    echo "WARNING: Key enrollment failed. You may need to clear Microsoft keys in BIOS first."
-    echo "Go to BIOS -> Secure Boot -> Custom -> Clear All Keys, then run 'sbctl enroll-keys' after first boot."
-}
+
+# Try to enroll keys, but don't fail if it doesn't work
+if sbctl enroll-keys; then
+    log "Secure Boot keys enrolled successfully"
+else
+    warn "Key enrollment failed. You may need to clear Microsoft keys in BIOS first."
+    warn "Go to BIOS -> Secure Boot -> Custom -> Clear All Keys, then run 'sbctl enroll-keys' after first boot."
+fi
 
 # Sign EFI binaries
 log "Signing EFI binaries"
 sbctl sign -s /boot/EFI/GRUB/grubx64.efi
 sbctl sign -s /boot/vmlinuz-linux-lts
 
-# Sign NVIDIA modules
+# Sign NVIDIA modules for all installed kernels
 log "Signing NVIDIA kernel modules"
+signed_count=0
 for kver in /usr/lib/modules/*; do
-    for mod in "$kver"/kernel/drivers/video/nvidia*.ko*; do
-        [ -e "$mod" ] && sbctl sign -s "$mod"
-    done
+    if [ -d "$kver" ]; then
+        kver_name=$(basename "$kver")
+        log "Checking kernel version: $kver_name"
+        for mod in "$kver"/kernel/drivers/video/nvidia*.ko*; do
+            if [ -e "$mod" ]; then
+                log "Signing module: $(basename "$mod") for kernel $kver_name"
+                sbctl sign -s "$mod"
+                ((signed_count++))
+            fi
+        done
+    fi
 done
+
+if [ $signed_count -eq 0 ]; then
+    warn "No NVIDIA modules found to sign. This might be normal if modules aren't built yet."
+    warn "After first boot, run: sudo mkinitcpio -P && sudo sbctl sign -s /usr/lib/modules/*/kernel/drivers/video/nvidia*.ko*"
+else
+    log "Signed $signed_count NVIDIA modules"
+fi
 
 # Create pacman hooks for auto-signing
 log "Creating pacman hooks for auto-signing"
@@ -270,9 +293,9 @@ main() {
     partition_disk
     format_partitions
     mount_partitions
-    create_swapfile
     install_base
     generate_fstab
+    create_swapfile  # Now called after fstab is generated
     configure_system
 
     log "Installation complete!"
