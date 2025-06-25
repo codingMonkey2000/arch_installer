@@ -1,19 +1,12 @@
 #!/bin/bash
 
 # ====
-# DEBUGGED Arch Linux Installation Script
+# FIXED Arch Linux Installation Script
 # ====
 # 
-# This is a thoroughly debugged version of the Arch Linux installation script
-# with comprehensive error reporting, debugging output, and troubleshooting information.
-#
-# DEBUGGING FEATURES ADDED:
-# - Comprehensive error reporting with line numbers
-# - Step-by-step execution logging
-# - Dependency checking
-# - Environment validation
-# - Safe execution mode for testing
-# - Detailed troubleshooting information
+# This script provides an interactive, comprehensive Arch Linux installation
+# with hardware-specific optimizations, security hardening, and complete
+# development environment setup.
 #
 # FIXES APPLIED:
 # - Added missing main function call (primary cause of hanging)
@@ -24,8 +17,6 @@
 # - Fixed variable quoting issues
 # - Added comprehensive error handling
 # - Optimized for Norwegian keyboard layout
-# - Added root privilege checking with bypass option
-# - Added safe mode for testing without root
 #
 # Target Hardware:
 # - AMD Ryzen 9 9950X
@@ -34,78 +25,28 @@
 # - MediaTek MT7927 WiFi (with workaround)
 # - Norwegian keyboard layout
 #
-# Usage:
-# - Normal installation: sudo ./arch-install-debug.sh
-# - Test mode (no root required): ./arch-install-debug.sh --test
-# - Debug mode: ./arch-install-debug.sh --debug
+# Features:
+# - Interactive configuration prompts
+# - Complete disk wipe and partitioning
+# - Secure Boot with systemd-boot and sbctl
+# - Hardware-specific driver installation
+# - Comprehensive development tools
+# - Security hardening
+# - Error handling and recovery
 #
-# Author: Debugged version for Arch Linux 2025
+# Author: Fixed version for Arch Linux 2025
 # Date: June 25, 2025
 # ====
 
-# Enhanced error handling with line numbers
 set -euo pipefail
-trap 'echo "ERROR: Script failed at line $LINENO. Exit code: $?" >&2; cleanup; exit 1' ERR
-trap 'echo "INTERRUPTED: Script interrupted by user" >&2; cleanup; exit 130' INT TERM
-
-# ====
-# DEBUGGING AND LOGGING SETUP
-# ====
-
-# Debug mode flag
-DEBUG_MODE=false
-TEST_MODE=false
-SAFE_MODE=false
-
-# Parse command line arguments
-for arg in "$@"; do
-    case $arg in
-        --debug)
-            DEBUG_MODE=true
-            set -x  # Enable bash debugging
-            ;;
-        --test)
-            TEST_MODE=true
-            echo "TEST MODE: Running in test mode (no root required, no actual installation)"
-            ;;
-        --safe)
-            SAFE_MODE=true
-            echo "SAFE MODE: Running in safe mode (validation only)"
-            ;;
-        --help|-h)
-            echo "Usage: $0 [--debug] [--test] [--safe] [--help]"
-            echo "  --debug: Enable verbose debugging output"
-            echo "  --test:  Run in test mode (no root required)"
-            echo "  --safe:  Run in safe mode (validation only)"
-            echo "  --help:  Show this help message"
-            exit 0
-            ;;
-    esac
-done
-
-# Logging function
-log_debug() {
-    if [[ "$DEBUG_MODE" == "true" ]]; then
-        echo "[DEBUG $(date '+%H:%M:%S')] $*" >&2
-    fi
-}
-
-log_step() {
-    echo "[STEP $(date '+%H:%M:%S')] $*"
-}
 
 # ====
 # GLOBAL VARIABLES AND CONFIGURATION
 # ====
 
 # Script metadata
-readonly SCRIPT_VERSION="2.2.0-DEBUG"
-readonly SCRIPT_NAME="Arch Linux Debugged Installer"
-
-log_debug "Script version: $SCRIPT_VERSION"
-log_debug "Debug mode: $DEBUG_MODE"
-log_debug "Test mode: $TEST_MODE"
-log_debug "Safe mode: $SAFE_MODE"
+readonly SCRIPT_VERSION="2.1.0-FIXED"
+readonly SCRIPT_NAME="Arch Linux Fixed Installer"
 
 # Color codes for output
 readonly RED='\033[0;31m'
@@ -229,47 +170,42 @@ readonly APPLICATION_PACKAGES=(
 # Print colored output
 print_status() {
     echo -e "${BLUE}[INFO]${NC} $1"
-    log_debug "STATUS: $1"
 }
 
 print_success() {
     echo -e "${GREEN}[SUCCESS]${NC} $1"
-    log_debug "SUCCESS: $1"
 }
 
 print_warning() {
     echo -e "${YELLOW}[WARNING]${NC} $1"
-    log_debug "WARNING: $1"
 }
 
 print_error() {
     echo -e "${RED}[ERROR]${NC} $1"
-    log_debug "ERROR: $1"
 }
 
 print_header() {
     echo -e "\n${PURPLE}=== $1 ===${NC}\n"
-    log_debug "HEADER: $1"
 }
 
-# Enhanced error handling
+# Error handling
 error_exit() {
     print_error "$1"
     print_error "Installation failed. Check the logs above for details."
-    print_error "Line number: ${BASH_LINENO[1]}"
-    print_error "Function: ${FUNCNAME[1]}"
-    cleanup
     exit 1
 }
 
 # Cleanup function
 cleanup() {
-    log_debug "Running cleanup function"
-    if [[ "$TEST_MODE" == "false" ]] && mountpoint -q /mnt 2>/dev/null; then
+    if mountpoint -q /mnt 2>/dev/null; then
         print_status "Cleaning up mounts..."
         umount -R /mnt 2>/dev/null || true
     fi
 }
+
+# Set up error handling
+trap cleanup EXIT
+trap 'error_exit "Script interrupted by user"' INT TERM
 
 # Confirmation prompt - FIXED: Added -r flag to read
 confirm() {
@@ -295,14 +231,13 @@ confirm() {
 }
 
 # Secure password input - FIXED: Added -r flag to read
-
 read_password() {
     local prompt="$1"
     local password
     local password_confirm
 
     while true; do
-        echo -en "$prompt (input hidden): "
+        echo -en "$prompt (input hidden, just type and press enter): "
         read -r -s password
         echo
         echo -n "Confirm password (input hidden): "
@@ -311,8 +246,8 @@ read_password() {
 
         if [[ "$password" == "$password_confirm" ]]; then
             if [[ ${#password} -ge 8 ]]; then
+                print_status "Password accepted"
                 echo "$password"
-                print_success "Password accepted"
                 return 0
             else
                 print_error "Password must be at least 8 characters long."
@@ -323,82 +258,30 @@ read_password() {
     done
 }
 
-
 # ====
-# DEPENDENCY AND ENVIRONMENT CHECKING
+# SYSTEM VALIDATION FUNCTIONS
 # ====
 
-check_dependencies() {
-    print_header "Checking Dependencies and Environment"
-    
-    # Skip dependency checks in test or safe mode
-    if [[ "$TEST_MODE" == "true" || "$SAFE_MODE" == "true" ]]; then
-        print_warning "Skipping dependency checks (test/safe mode)"
-        return 0
+check_uefi_boot() {
+    print_status "Checking UEFI boot mode..."
+    if [[ ! -d /sys/firmware/efi ]]; then
+        error_exit "System is not booted in UEFI mode. Please enable UEFI in BIOS settings."
     fi
-    
-    log_step "Checking required commands"
-    local required_commands=("pacman" "pacstrap" "genfstab" "arch-chroot")
-    local missing_commands=()
-    
-    for cmd in "${required_commands[@]}"; do
-        if ! command -v "$cmd" &> /dev/null; then
-            missing_commands+=("$cmd")
-            print_error "Missing required command: $cmd"
-        else
-            log_debug "Found command: $cmd"
-        fi
-    done
-    
-    if [[ ${#missing_commands[@]} -gt 0 ]]; then
-        print_error "Missing required commands: ${missing_commands[*]}"
-        print_error "This script must be run from an Arch Linux live environment"
-        return 1
-    fi
-    
-    print_success "All required commands found"
-    return 0
+    print_success "UEFI boot mode confirmed"
 }
 
-check_environment() {
-    print_header "Environment Validation"
-    
-    # Check if we're in test mode
-    if [[ "$TEST_MODE" == "true" ]]; then
-        print_warning "Running in TEST MODE - skipping environment checks"
-        return 0
+check_internet_connection() {
+    print_status "Checking internet connectivity..."
+    if ! ping -c 3 archlinux.org &>/dev/null; then
+        error_exit "No internet connection. Please configure network and try again."
     fi
-    
-    log_step "Checking if running in Arch Linux live environment"
-    if [[ ! -f /etc/arch-release ]]; then
-        print_warning "Not running on Arch Linux (this may be expected in test mode)"
-    else
-        print_success "Running on Arch Linux"
-    fi
-    
-    log_step "Checking UEFI boot mode"
-    if [[ ! -d /sys/firmware/efi ]]; then
-        if [[ "$SAFE_MODE" == "true" ]]; then
-            print_warning "UEFI mode not detected (safe mode - continuing)"
-        else
-            error_exit "System is not booted in UEFI mode. Please enable UEFI in BIOS settings."
-        fi
-    else
-        print_success "UEFI boot mode confirmed"
-    fi
-    
-    log_step "Checking internet connectivity"
-    if ! ping -c 1 -W 5 8.8.8.8 &>/dev/null; then
-        if [[ "$SAFE_MODE" == "true" ]]; then
-            print_warning "No internet connection (safe mode - continuing)"
-        else
-            error_exit "No internet connection. Please configure network and try again."
-        fi
-    else
-        print_success "Internet connection confirmed"
-    fi
-    
-    return 0
+    print_success "Internet connection confirmed"
+}
+
+update_system_clock() {
+    print_status "Updating system clock..."
+    timedatectl set-ntp true
+    print_success "System clock synchronized"
 }
 
 # ====
@@ -406,62 +289,38 @@ check_environment() {
 # ====
 
 get_user_input() {
-    print_status "Starting user configuration..."
     print_header "System Configuration"
-    
-    # In test mode or safe mode, use default values
-    if [[ "$TEST_MODE" == "true" || "$SAFE_MODE" == "true" ]]; then
-        USERNAME="testuser"
-        HOSTNAME="testhost"
-        ROOT_PASSWORD="testpass123"
-        USER_PASSWORD="testpass123"
-        TIMEZONE="Europe/Oslo"
-        print_status "Using test/safe mode defaults"
-        return 0
-    fi
     
     # Username
     while [[ -z "$USERNAME" ]]; do
-        print_status "Prompting for username..."
         read -r -p "Enter username: " USERNAME
         if [[ ! "$USERNAME" =~ ^[a-z_][a-z0-9_-]*$ ]]; then
             print_error "Invalid username. Use lowercase letters, numbers, underscore, and hyphen only."
             USERNAME=""
         fi
     done
-    log_debug "Username set: $USERNAME"
     
     # Hostname - FIXED: This was the main hanging point
     while [[ -z "$HOSTNAME" ]]; do
-        print_status "Prompting for hostname..."
         read -r -p "Enter hostname: " HOSTNAME
         if [[ ! "$HOSTNAME" =~ ^[a-zA-Z0-9-]+$ ]]; then
             print_error "Invalid hostname. Use letters, numbers, and hyphens only."
             HOSTNAME=""
         fi
     done
-    log_debug "Hostname set: $HOSTNAME"
     
     # Passwords
-    print_status "Prompting for root password..."
     ROOT_PASSWORD=$(read_password "Enter root password")
-    print_status "Prompting for user password..."
     USER_PASSWORD=$(read_password "Enter user password")
-    log_debug "Passwords set"
     
     # Timezone
     print_status "Available timezones:"
-    if command -v timedatectl &> /dev/null; then
-        timedatectl list-timezones | grep -E "(Europe|America|Asia)" | head -20
-    else
-        echo "Europe/Oslo, Europe/London, America/New_York, etc."
-    fi
+    timedatectl list-timezones | grep -E "(Europe|America|Asia)" | head -20
     read -r -p "Enter timezone (e.g., Europe/Oslo): " TIMEZONE
-    if command -v timedatectl &> /dev/null && ! timedatectl list-timezones | grep -q "^$TIMEZONE$"; then
+    if ! timedatectl list-timezones | grep -q "^$TIMEZONE$"; then
         print_warning "Invalid timezone. Using Europe/Oslo as default."
         TIMEZONE="Europe/Oslo"
     fi
-    log_debug "Timezone set: $TIMEZONE"
     
     # Optional features
     if confirm "Enable Secure Boot setup?" "y"; then
@@ -469,50 +328,37 @@ get_user_input() {
     else
         ENABLE_SECURE_BOOT="n"
     fi
-    log_debug "Secure Boot: $ENABLE_SECURE_BOOT"
     
     if confirm "Install complete development environment?" "y"; then
         INSTALL_DEVELOPMENT_TOOLS="y"
     else
         INSTALL_DEVELOPMENT_TOOLS="n"
     fi
-    log_debug "Development tools: $INSTALL_DEVELOPMENT_TOOLS"
 }
 
 select_disk() {
     print_header "Disk Selection"
-    
-    # In test mode or safe mode, use a dummy disk
-    if [[ "$TEST_MODE" == "true" || "$SAFE_MODE" == "true" ]]; then
-        SELECTED_DISK="/dev/null"
-        print_status "Using test/safe mode dummy disk: $SELECTED_DISK"
-        return 0
-    fi
     
     print_warning "WARNING: The selected disk will be completely wiped!"
     echo
     
     # List available disks
     print_status "Available disks:"
-    if command -v lsblk &> /dev/null; then
-        lsblk -d -o NAME,SIZE,MODEL | grep -E "(nvme|sd[a-z])" || echo "No disks found"
-    else
-        echo "lsblk command not available"
-    fi
+    lsblk -d -o NAME,SIZE,MODEL | grep -E "(nvme|sd[a-z])"
     echo
     
     while [[ -z "$SELECTED_DISK" ]]; do
         read -r -p "Enter disk to install to (e.g., /dev/nvme0n1 or /dev/sda): " SELECTED_DISK
         
         if [[ ! -b "$SELECTED_DISK" ]]; then
-            print_error "Invalid disk selection: $SELECTED_DISK"
+            print_error "Invalid disk selection."
             SELECTED_DISK=""
             continue
         fi
         
         # Show disk info
         print_status "Selected disk information:"
-        lsblk "$SELECTED_DISK" || echo "Cannot display disk info"
+        lsblk "$SELECTED_DISK"
         echo
         
         if confirm "This will COMPLETELY WIPE $SELECTED_DISK. Continue?" "n"; then
@@ -521,20 +367,14 @@ select_disk() {
             SELECTED_DISK=""
         fi
     done
-    log_debug "Selected disk: $SELECTED_DISK"
 }
 
 # ====
-# INSTALLATION FUNCTIONS (SAFE MODE COMPATIBLE)
+# DISK MANAGEMENT FUNCTIONS
 # ====
 
 prepare_disk() {
     print_header "Preparing Disk"
-    
-    if [[ "$TEST_MODE" == "true" || "$SAFE_MODE" == "true" ]]; then
-        print_status "SIMULATION: Would prepare disk $SELECTED_DISK"
-        return 0
-    fi
     
     print_status "Wiping disk $SELECTED_DISK..."
     
@@ -567,11 +407,6 @@ prepare_disk() {
 format_partitions() {
     print_header "Formatting Partitions"
     
-    if [[ "$TEST_MODE" == "true" || "$SAFE_MODE" == "true" ]]; then
-        print_status "SIMULATION: Would format partitions"
-        return 0
-    fi
-    
     # Determine partition naming scheme
     if [[ "$SELECTED_DISK" =~ nvme ]]; then
         local efi_partition="${SELECTED_DISK}p1"
@@ -593,11 +428,6 @@ format_partitions() {
 mount_partitions() {
     print_header "Mounting Partitions"
     
-    if [[ "$TEST_MODE" == "true" || "$SAFE_MODE" == "true" ]]; then
-        print_status "SIMULATION: Would mount partitions"
-        return 0
-    fi
-    
     # Determine partition naming scheme
     if [[ "$SELECTED_DISK" =~ nvme ]]; then
         local efi_partition="${SELECTED_DISK}p1"
@@ -617,13 +447,12 @@ mount_partitions() {
     print_success "Partitions mounted successfully"
 }
 
+# ====
+# BASE SYSTEM INSTALLATION
+# ====
+
 install_base_system() {
     print_header "Installing Base System"
-    
-    if [[ "$TEST_MODE" == "true" || "$SAFE_MODE" == "true" ]]; then
-        print_status "SIMULATION: Would install base system"
-        return 0
-    fi
     
     print_status "Updating package databases..."
     pacman -Sy
@@ -637,135 +466,848 @@ install_base_system() {
     print_success "Base system installed successfully"
 }
 
+# FIXED: Improved system configuration with systemd-boot instead of GRUB
+configure_system() {
+    print_header "Configuring System"
+    
+    # Create configuration script to run in chroot
+    cat > /mnt/configure_system.sh << 'EOF'
+#!/bin/bash
+set -euo pipefail
+
+# Set timezone
+ln -sf /usr/share/zoneinfo/$1 /etc/localtime
+hwclock --systohc
+
+# Set locale
+echo "en_US.UTF-8 UTF-8" > /etc/locale.gen
+echo "nb_NO.UTF-8 UTF-8" >> /etc/locale.gen
+locale-gen
+echo "LANG=en_US.UTF-8" > /etc/locale.conf
+
+# Set keyboard layout
+echo "KEYMAP=no" > /etc/vconsole.conf
+
+# Set hostname
+echo "$2" > /etc/hostname
+cat > /etc/hosts << HOSTS_EOF
+127.0.0.1   localhost
+::1         localhost
+127.0.1.1   $2.localdomain $2
+HOSTS_EOF
+
+# Configure mkinitcpio for NVIDIA and AMD
+sed -i 's/MODULES=()/MODULES=(amdgpu nvidia nvidia_modeset nvidia_uvm nvidia_drm)/' /etc/mkinitcpio.conf
+
+# Generate initramfs
+mkinitcpio -P
+
+# Install and configure systemd-boot (FIXED: Using systemd-boot instead of GRUB)
+bootctl install
+
+# Create systemd-boot entries
+mkdir -p /boot/loader/entries
+
+cat > /boot/loader/loader.conf << LOADER_EOF
+default arch.conf
+timeout 3
+console-mode max
+editor no
+LOADER_EOF
+
+cat > /boot/loader/entries/arch.conf << ARCH_ENTRY_EOF
+title   Arch Linux
+linux   /vmlinuz-linux
+initrd  /amd-ucode.img
+initrd  /initramfs-linux.img
+options root=LABEL=ROOT rw nvidia_drm.modeset=1 nvidia_drm.fbdev=1
+ARCH_ENTRY_EOF
+
+cat > /boot/loader/entries/arch-lts.conf << ARCH_LTS_ENTRY_EOF
+title   Arch Linux LTS
+linux   /vmlinuz-linux-lts
+initrd  /amd-ucode.img
+initrd  /initramfs-linux-lts.img
+options root=LABEL=ROOT rw nvidia_drm.modeset=1 nvidia_drm.fbdev=1
+ARCH_LTS_ENTRY_EOF
+
+# Enable NetworkManager
+systemctl enable NetworkManager
+
+# Set root password
+echo "root:$3" | chpasswd
+
+# Create user
+useradd -m -G wheel,audio,video,optical,storage,docker -s /bin/bash "$4"
+echo "$4:$5" | chpasswd
+
+# Configure sudo
+echo "%wheel ALL=(ALL:ALL) ALL" >> /etc/sudoers
+
+# Create pacman hook for NVIDIA
+mkdir -p /etc/pacman.d/hooks
+cat > /etc/pacman.d/hooks/nvidia.hook << NVIDIA_HOOK_EOF
+[Trigger]
+Operation=Install
+Operation=Upgrade
+Operation=Remove
+Type=Package
+Target=nvidia-open
+Target=linux
+Target=linux-lts
+
+[Action]
+Description=Update initramfs for NVIDIA
+Depends=mkinitcpio
+When=PostTransaction
+NeedsTargets
+Exec=/bin/sh -c 'while read -r trg; do case \$trg in linux*) exit 0; esac; done; /usr/bin/mkinitcpio -P'
+NVIDIA_HOOK_EOF
+
+# Create systemd-boot update hook
+cat > /etc/pacman.d/hooks/95-systemd-boot.hook << SYSTEMD_BOOT_HOOK_EOF
+[Trigger]
+Type=Package
+Operation=Upgrade
+Target=systemd
+
+[Action]
+Description=Gracefully upgrading systemd-boot...
+When=PostTransaction
+Exec=/usr/bin/systemctl restart systemd-boot-update.service
+SYSTEMD_BOOT_HOOK_EOF
+
+EOF
+
+    # Make script executable and run it
+    chmod +x /mnt/configure_system.sh
+    arch-chroot /mnt ./configure_system.sh "$TIMEZONE" "$HOSTNAME" "$ROOT_PASSWORD" "$USERNAME" "$USER_PASSWORD"
+    
+    # Remove the script
+    rm /mnt/configure_system.sh
+    
+    print_success "System configuration completed"
+}
+
 # ====
-# MAIN FUNCTION
+# HARDWARE-SPECIFIC CONFIGURATION - ENHANCED for RTX 5090 and Ryzen 9950X
+# ====
+
+install_nvidia_drivers() {
+    print_header "Installing NVIDIA RTX 5090 Drivers"
+    
+    print_status "Installing NVIDIA open-source drivers (recommended for RTX 5090)..."
+    arch-chroot /mnt pacman -S --noconfirm nvidia-open nvidia-utils nvidia-settings lib32-nvidia-utils
+    
+    print_status "Configuring NVIDIA settings..."
+    
+    # Create NVIDIA configuration
+    cat > /mnt/etc/X11/xorg.conf.d/20-nvidia.conf << 'EOF'
+Section "Device"
+    Identifier "NVIDIA Card"
+    Driver "nvidia"
+    VendorName "NVIDIA Corporation"
+    Option "NoLogo" "true"
+    Option "UseEDID" "false"
+    Option "ConnectedMonitor" "DFP"
+    Option "TripleBuffer" "true"
+    Option "UseEvents" "false"
+EndSection
+EOF
+
+    # Configure NVIDIA power management
+    cat > /mnt/etc/modprobe.d/nvidia.conf << 'EOF'
+# Enable NVIDIA power management
+options nvidia NVreg_DynamicPowerManagement=0x02
+options nvidia NVreg_PreserveVideoMemoryAllocations=1
+EOF
+
+    print_success "NVIDIA drivers installed and configured"
+}
+
+# ENHANCED: Better MediaTek WiFi support
+configure_mediatek_workaround() {
+    print_header "MediaTek MT7927 Wireless Configuration"
+    
+    print_status "Installing MediaTek firmware and drivers..."
+    
+    # Install wireless tools and firmware
+    arch-chroot /mnt pacman -S --noconfirm wireless_tools wpa_supplicant iw linux-firmware
+    
+    # Try to install MediaTek firmware if available
+    if arch-chroot /mnt pacman -S --noconfirm linux-firmware-mediatek 2>/dev/null; then
+        print_success "MediaTek firmware installed"
+    else
+        print_warning "MediaTek firmware package not available"
+    fi
+    
+    # Create information file for user - FIXED: Proper quoting
+    cat > "/mnt/home/$USERNAME/WIRELESS_INFO.txt" << 'EOF'
+MEDIATEK MT7927 WIRELESS CARD COMPATIBILITY NOTICE
+====
+
+Your system contains a MediaTek MT7927 wireless card. Support status:
+
+CURRENT STATUS:
+- Basic MediaTek firmware has been installed
+- The mt76 driver may provide limited support
+- Full functionality is not guaranteed
+
+SOLUTIONS IF WIFI DOESN'T WORK:
+1. Replace the M.2 wireless card with a supported model:
+   - Intel AX210 (Wi-Fi 6E + Bluetooth 5.2) - RECOMMENDED
+   - Intel AX200 (Wi-Fi 6 + Bluetooth 5.1)
+   - Qualcomm Atheros cards with ath10k/ath11k support
+
+2. Use a USB wireless adapter:
+   - Look for adapters with MediaTek MT7612, MT7663, or MT7915 chips
+   - These are well supported by the mt76 driver
+
+3. Check for driver updates:
+   - Run: sudo pacman -Syu
+   - Check dmesg output: dmesg | grep -i mediatek
+
+TESTING WIFI:
+1. Check if interface is detected: ip link show
+2. Scan for networks: sudo iw dev wlan0 scan | grep SSID
+3. Connect via NetworkManager: nmcli device wifi connect "SSID" password "PASSWORD"
+
+For immediate connectivity, use Ethernet connection.
+EOF
+
+    chown "$USERNAME":"$USERNAME" "/mnt/home/$USERNAME/WIRELESS_INFO.txt"
+    
+    print_success "MediaTek WiFi configuration completed"
+}
+
+configure_norwegian_keyboard() {
+    print_header "Configuring Norwegian Keyboard Layout"
+    
+    print_status "Setting up Norwegian keyboard layout..."
+    
+    # X11 keymap configuration
+    cat > /mnt/etc/X11/xorg.conf.d/00-keyboard.conf << 'EOF'
+Section "InputClass"
+    Identifier "system-keyboard"
+    MatchIsKeyboard "on"
+    Option "XkbLayout" "no"
+    Option "XkbModel" "pc105"
+    Option "XkbVariant" ""
+    Option "XkbOptions" ""
+EndSection
+EOF
+
+    print_success "Norwegian keyboard layout configured"
+}
+
+# ENHANCED: AMD Ryzen 9950X optimizations
+configure_amd_optimizations() {
+    print_header "Configuring AMD Ryzen 9950X Optimizations"
+    
+    print_status "Installing AMD-specific packages..."
+    arch-chroot /mnt pacman -S --noconfirm amd-ucode zenpower3-dkms
+    
+    # Configure CPU governor
+    cat > /mnt/etc/systemd/system/cpu-performance.service << 'EOF'
+[Unit]
+Description=Set CPU governor to performance
+After=multi-user.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash -c 'echo performance | tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor'
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    arch-chroot /mnt systemctl enable cpu-performance.service
+    
+    print_success "AMD optimizations configured"
+}
+
+# ====
+# SECURITY CONFIGURATION - ENHANCED for systemd-boot
+# ====
+
+setup_secure_boot() {
+    if [[ "$ENABLE_SECURE_BOOT" != "y" ]]; then
+        print_status "Skipping Secure Boot setup (user choice)"
+        return 0
+    fi
+    
+    print_header "Setting Up Secure Boot with systemd-boot"
+    
+    print_status "Installing sbctl..."
+    arch-chroot /mnt pacman -S --noconfirm sbctl
+    
+    # Create Secure Boot setup script
+    cat > /mnt/setup_secure_boot.sh << 'EOF'
+#!/bin/bash
+set -euo pipefail
+
+echo "Creating Secure Boot keys..."
+sbctl create-keys
+
+echo "Enrolling keys (including Microsoft keys for compatibility)..."
+sbctl enroll-keys -m
+
+echo "Signing boot components..."
+sbctl sign -s /boot/vmlinuz-linux
+sbctl sign -s /boot/vmlinuz-linux-lts
+sbctl sign -s /boot/EFI/systemd/systemd-bootx64.efi
+sbctl sign -s /boot/EFI/BOOT/BOOTX64.EFI
+
+echo "Creating pacman hook for automatic signing..."
+mkdir -p /etc/pacman.d/hooks
+cat > /etc/pacman.d/hooks/95-secureboot.hook << SECUREBOOT_HOOK_EOF
+[Trigger]
+Operation=Install
+Operation=Upgrade
+Type=Package
+Target=linux
+Target=linux-lts
+Target=systemd
+
+[Action]
+Description=Signing kernel and bootloader for Secure Boot
+When=PostTransaction
+Exec=/usr/bin/sbctl sign-all
+Depends=sbctl
+SECUREBOOT_HOOK_EOF
+
+echo "Secure Boot setup completed!"
+echo "IMPORTANT: Reboot and enable Secure Boot in BIOS/UEFI settings."
+echo "Check status with: sbctl status"
+EOF
+
+    chmod +x /mnt/setup_secure_boot.sh
+    
+    print_warning "Secure Boot keys will be created. Run 'sudo /setup_secure_boot.sh' after first boot."
+    print_warning "Then enable Secure Boot in BIOS/UEFI settings."
+}
+
+configure_firewall() {
+    print_header "Configuring Firewall"
+    
+    print_status "Installing and configuring UFW..."
+    arch-chroot /mnt pacman -S --noconfirm ufw
+    
+    # Configure UFW
+    arch-chroot /mnt ufw --force enable
+    arch-chroot /mnt ufw default deny incoming
+    arch-chroot /mnt ufw default allow outgoing
+    
+    # Enable UFW service
+    arch-chroot /mnt systemctl enable ufw
+    
+    print_success "Firewall configured and enabled"
+}
+
+# ====
+# PACKAGE INSTALLATION
+# ====
+
+install_desktop_environment() {
+    print_header "Installing Desktop Environment"
+    
+    print_status "Installing KDE Plasma and applications..."
+    arch-chroot /mnt pacman -S --noconfirm "${DESKTOP_PACKAGES[@]}"
+    
+    print_status "Enabling display manager..."
+    arch-chroot /mnt systemctl enable sddm
+    
+    print_status "Configuring audio..."
+    arch-chroot /mnt systemctl --global enable pipewire pipewire-pulse
+    
+    print_success "Desktop environment installed"
+}
+
+install_development_tools() {
+    if [[ "$INSTALL_DEVELOPMENT_TOOLS" != "y" ]]; then
+        print_status "Skipping development tools installation (user choice)"
+        return 0
+    fi
+    
+    print_header "Installing Development Environment"
+    
+    print_status "Installing development packages..."
+    arch-chroot /mnt pacman -S --noconfirm "${DEVELOPMENT_PACKAGES[@]}"
+    
+    print_status "Enabling Docker service..."
+    arch-chroot /mnt systemctl enable docker
+    arch-chroot /mnt usermod -aG docker "$USERNAME"
+    
+    print_status "Installing Rust toolchain..."
+    arch-chroot /mnt sudo -u "$USERNAME" rustup default stable
+    
+    print_success "Development environment installed"
+}
+
+install_applications() {
+    print_header "Installing Applications"
+    
+    print_status "Installing application packages..."
+    arch-chroot /mnt pacman -S --noconfirm "${APPLICATION_PACKAGES[@]}"
+    
+    print_status "Enabling services..."
+    arch-chroot /mnt systemctl enable --global flatpak
+    
+    print_success "Applications installed"
+}
+
+install_aur_helper() {
+    print_header "Installing AUR Helper"
+    
+    print_status "Installing yay AUR helper..."
+    
+    # Create script to install yay as user
+    cat > /mnt/install_yay.sh << 'EOF'
+#!/bin/bash
+set -euo pipefail
+
+cd /tmp
+git clone https://aur.archlinux.org/yay.git
+cd yay
+makepkg -si --noconfirm
+cd ..
+rm -rf yay
+EOF
+
+    chmod +x /mnt/install_yay.sh
+    arch-chroot /mnt sudo -u "$USERNAME" /install_yay.sh
+    rm /mnt/install_yay.sh
+    
+    print_success "AUR helper installed"
+}
+
+install_aur_packages() {
+    print_header "Installing Essential AUR Packages"
+    
+    print_status "Installing selected AUR packages..."
+    
+    # Create script to install AUR packages
+    cat > /mnt/install_aur.sh << 'EOF'
+#!/bin/bash
+set -euo pipefail
+
+# Install essential AUR packages
+yay -S --noconfirm visual-studio-code-bin brave-bin
+
+# Install development tools
+yay -S --noconfirm postman-bin
+
+# Install system utilities
+yay -S --noconfirm timeshift auto-cpufreq
+
+echo "Essential AUR packages installed successfully"
+EOF
+
+    chmod +x /mnt/install_aur.sh
+    arch-chroot /mnt sudo -u "$USERNAME" /install_aur.sh
+    rm /mnt/install_aur.sh
+    
+    print_success "AUR packages installed"
+}
+
+# ====
+# SYSTEM OPTIMIZATION - ENHANCED
+# ====
+
+optimize_system() {
+    print_header "Optimizing System"
+    
+    print_status "Configuring system optimizations..."
+    
+    # Enable multilib repository
+    sed -i '/\[multilib\]/,/Include/s/^#//' /mnt/etc/pacman.conf
+    
+    # Configure makepkg for faster compilation - FIXED: Proper quoting
+    sed -i 's/#MAKEFLAGS="-j2"/MAKEFLAGS="-j$(nproc)"/' /mnt/etc/makepkg.conf
+    sed -i 's/COMPRESSXZ=(xz -c -z -)/COMPRESSXZ=(xz -c -z - --threads=0)/' /mnt/etc/makepkg.conf
+    
+    # Configure pacman for faster downloads
+    sed -i 's/#ParallelDownloads = 5/ParallelDownloads = 10/' /mnt/etc/pacman.conf
+    
+    # Enable SSD optimizations if applicable
+    if [[ "$SELECTED_DISK" =~ nvme ]] || [[ "$SELECTED_DISK" =~ ssd ]]; then
+        print_status "Enabling SSD optimizations..."
+        arch-chroot /mnt systemctl enable fstrim.timer
+    fi
+    
+    # Configure AMD optimizations
+    configure_amd_optimizations
+    
+    print_success "System optimizations applied"
+}
+
+create_user_scripts() {
+    print_header "Creating User Scripts"
+    
+    # Create update script - FIXED: Proper quoting
+    cat > "/mnt/home/$USERNAME/update-system.sh" << 'EOF'
+#!/bin/bash
+# System update script
+
+echo "Updating official packages..."
+sudo pacman -Syu
+
+echo "Updating AUR packages..."
+yay -Sua
+
+echo "Cleaning package cache..."
+sudo pacman -Sc --noconfirm
+
+echo "Removing orphaned packages..."
+orphans=$(pacman -Qtdq)
+if [[ -n "$orphans" ]]; then
+    sudo pacman -Rns $orphans --noconfirm
+fi
+
+echo "System update completed!"
+EOF
+
+    # Create development environment setup script
+    cat > "/mnt/home/$USERNAME/setup-dev-env.sh" << 'EOF'
+#!/bin/bash
+# Development environment setup script
+
+echo "Setting up development environment..."
+
+# Install Node Version Manager
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
+
+# Install Python version manager
+curl https://pyenv.run | bash
+
+# Configure Git (user will need to set their details)
+echo "Configure Git with your details:"
+echo "git config --global user.name 'Your Name'"
+echo "git config --global user.email 'your.email@example.com'"
+
+echo "Development environment setup completed!"
+echo "Restart your terminal to use nvm and pyenv."
+EOF
+
+    # Make scripts executable - FIXED: Proper quoting
+    chmod +x "/mnt/home/$USERNAME/update-system.sh"
+    chmod +x "/mnt/home/$USERNAME/setup-dev-env.sh"
+    
+    print_success "User scripts created"
+}
+
+create_post_install_info() {
+    print_header "Creating Post-Installation Guide"
+    
+    # Create comprehensive post-installation guide - FIXED: Proper quoting
+    cat > "/mnt/home/$USERNAME/POST_INSTALL_GUIDE.md" << 'EOF'
+# Arch Linux Post-Installation Guide
+
+## System Information
+- **Installation Date**: $(date)
+- **Kernel**: Linux with LTS fallback
+- **Bootloader**: systemd-boot
+- **Desktop Environment**: KDE Plasma
+- **Graphics**: NVIDIA RTX 5090 with open drivers
+- **CPU**: AMD Ryzen 9950X with optimizations
+
+## First Boot Steps
+
+### 1. Network Configuration
+If WiFi doesn't work (MediaTek MT7927 issue):
+```bash
+# Check network interfaces
+ip link show
+
+# Connect to WiFi if available
+nmcli device wifi connect "SSID" password "PASSWORD"
+
+# Or use Ethernet for now
+```
+
+### 2. System Updates
+```bash
+# Update system
+sudo pacman -Syu
+
+# Update AUR packages
+yay -Sua
+```
+
+### 3. Secure Boot Setup (if enabled)
+```bash
+# Run the secure boot setup script
+sudo /setup_secure_boot.sh
+
+# Reboot and enable Secure Boot in BIOS
+# Check status after reboot
+sbctl status
+```
+
+### 4. Graphics Configuration
+```bash
+# Check NVIDIA driver status
+nvidia-smi
+
+# Configure NVIDIA settings
+nvidia-settings
+```
+
+### 5. Development Environment
+```bash
+# Run development setup script
+./setup-dev-env.sh
+
+# Configure Git
+git config --global user.name "Your Name"
+git config --global user.email "your.email@example.com"
+```
+
+## Hardware-Specific Notes
+
+### AMD Ryzen 9950X
+- CPU performance governor is enabled by default
+- Zenpower3 module provides better power monitoring
+- All cores should be detected and functional
+
+### NVIDIA RTX 5090
+- Using open-source NVIDIA drivers (recommended)
+- CUDA support should work out of the box
+- For gaming, enable GameMode: `gamemoderun <game>`
+
+### MediaTek MT7927 WiFi
+- Check ~/WIRELESS_INFO.txt for detailed information
+- Consider replacing with Intel AX210 for best compatibility
+- USB WiFi adapters are a temporary solution
+
+### Norwegian Keyboard
+- Console and X11 layouts are configured
+- Should work in both TTY and desktop environment
+
+## Useful Commands
+
+### System Maintenance
+```bash
+# Update everything
+./update-system.sh
+
+# Check system status
+systemctl status
+
+# View system logs
+journalctl -xe
+
+# Check disk usage
+df -h
+```
+
+### Package Management
+```bash
+# Search packages
+pacman -Ss <package>
+yay -Ss <package>
+
+# Install packages
+sudo pacman -S <package>
+yay -S <aur-package>
+
+# Remove packages
+sudo pacman -Rns <package>
+```
+
+### Performance Monitoring
+```bash
+# CPU information
+lscpu
+
+# GPU information
+nvidia-smi
+
+# Memory usage
+free -h
+
+# Disk I/O
+iotop
+
+# Network usage
+nethogs
+```
+
+## Troubleshooting
+
+### Boot Issues
+- Use LTS kernel from boot menu if main kernel fails
+- Check systemd-boot entries in /boot/loader/entries/
+
+### Graphics Issues
+- Switch to TTY with Ctrl+Alt+F2
+- Check logs: `journalctl -u sddm`
+- Reinstall drivers: `sudo pacman -S nvidia-open`
+
+### Network Issues
+- Check NetworkManager: `systemctl status NetworkManager`
+- Restart network: `sudo systemctl restart NetworkManager`
+- Use ethernet cable for troubleshooting
+
+### Performance Issues
+- Check CPU governor: `cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor`
+- Monitor temperatures: `sensors`
+- Check for thermal throttling: `dmesg | grep -i thermal`
+
+## Additional Software
+
+### Gaming
+```bash
+# Install Steam games
+# Enable Proton in Steam settings
+
+# Install Lutris for other games
+# Configure Wine prefixes as needed
+
+# Use GameMode for better performance
+gamemoderun <game>
+```
+
+### Development
+```bash
+# Install additional IDEs
+yay -S intellij-idea-community-edition
+yay -S pycharm-community-edition
+
+# Install Docker containers
+docker pull ubuntu
+docker pull node
+```
+
+### Multimedia
+```bash
+# Install codecs
+sudo pacman -S gst-plugins-good gst-plugins-bad gst-plugins-ugly
+
+# Install additional media tools
+sudo pacman -S handbrake ffmpeg
+```
+
+## Security Recommendations
+
+1. **Firewall**: UFW is enabled and configured
+2. **Updates**: Keep system updated regularly
+3. **Secure Boot**: Enable if you set it up
+4. **User Permissions**: Don't run unnecessary commands as root
+5. **Backups**: Set up Timeshift for system snapshots
+
+## Support Resources
+
+- **Arch Wiki**: https://wiki.archlinux.org/
+- **Forums**: https://bbs.archlinux.org/
+- **Reddit**: r/archlinux
+- **IRC**: #archlinux on Libera.Chat
+
+## Files Created by Installer
+
+- `~/update-system.sh` - System update script
+- `~/setup-dev-env.sh` - Development environment setup
+- `~/WIRELESS_INFO.txt` - WiFi compatibility information
+- `~/POST_INSTALL_GUIDE.md` - This guide
+- `/setup_secure_boot.sh` - Secure Boot configuration (if enabled)
+
+Enjoy your new Arch Linux system!
+EOF
+
+    # Set ownership - FIXED: Proper quoting
+    chown "$USERNAME":"$USERNAME" "/mnt/home/$USERNAME/POST_INSTALL_GUIDE.md"
+    
+    print_success "Post-installation guide created"
+}
+
+# ====
+# MAIN INSTALLATION FUNCTION
 # ====
 
 main() {
     print_header "$SCRIPT_NAME v$SCRIPT_VERSION"
     
-    log_step "Starting installation process"
+    # Pre-installation checks
+    check_uefi_boot
+    check_internet_connection
+    update_system_clock
     
-    # Check dependencies first
-    if ! check_dependencies; then
-        error_exit "Dependency check failed"
-    fi
-    
-    # Check environment
-    if ! check_environment; then
-        error_exit "Environment validation failed"
-    fi
-    
-    # Get user input
+    # User configuration
     get_user_input
-    
-    # Select disk
     select_disk
     
-    # Disk operations
+    # Final confirmation
+    echo
+    print_warning "FINAL CONFIRMATION"
+    echo "Username: $USERNAME"
+    echo "Hostname: $HOSTNAME"
+    echo "Disk: $SELECTED_DISK"
+    echo "Timezone: $TIMEZONE"
+    echo "Secure Boot: $ENABLE_SECURE_BOOT"
+    echo "Development Tools: $INSTALL_DEVELOPMENT_TOOLS"
+    echo
+    
+    if ! confirm "Proceed with installation? This will WIPE $SELECTED_DISK!" "n"; then
+        print_status "Installation cancelled by user."
+        exit 0
+    fi
+    
+    # Disk preparation
     prepare_disk
     format_partitions
     mount_partitions
     
-    # Install base system
+    # Base system installation
     install_base_system
+    configure_system
     
-    print_success "Installation completed successfully!"
+    # Hardware-specific configuration
+    install_nvidia_drivers
+    configure_mediatek_workaround
+    configure_norwegian_keyboard
     
-    if [[ "$TEST_MODE" == "true" ]]; then
-        print_status "TEST MODE: No actual installation was performed"
-    elif [[ "$SAFE_MODE" == "true" ]]; then
-        print_status "SAFE MODE: Only validation was performed"
-    else
-        print_status "System is ready for configuration and reboot"
+    # Security configuration
+    setup_secure_boot
+    configure_firewall
+    
+    # Package installation
+    install_desktop_environment
+    install_development_tools
+    install_applications
+    install_aur_helper
+    install_aur_packages
+    
+    # System optimization
+    optimize_system
+    create_user_scripts
+    create_post_install_info
+    
+    # Final steps
+    print_header "Installation Complete!"
+    
+    print_success "Arch Linux installation completed successfully!"
+    echo
+    print_status "Next steps:"
+    echo "1. Reboot into your new system"
+    echo "2. Read ~/POST_INSTALL_GUIDE.md for important information"
+    echo "3. Run ~/setup-dev-env.sh to complete development environment setup"
+    echo "4. Configure Secure Boot if enabled (run: sudo /setup_secure_boot.sh)"
+    echo "5. Address MediaTek wireless card compatibility (see ~/WIRELESS_INFO.txt)"
+    echo
+    
+    if confirm "Reboot now?" "y"; then
+        reboot
     fi
-    
-    # Create troubleshooting information
-    create_troubleshooting_info
-}
-
-# ====
-# TROUBLESHOOTING INFORMATION
-# ====
-
-create_troubleshooting_info() {
-    print_header "Creating Troubleshooting Information"
-    
-    local info_file="/home/ubuntu/ARCH_INSTALL_DEBUG_INFO.txt"
-    
-    cat > "$info_file" << 'EOF'
-ARCH LINUX INSTALLATION DEBUG INFORMATION
-==========================================
-
-This file contains debugging information for the Arch Linux installation script.
-
-SCRIPT EXECUTION DETAILS:
-- Script Version: 2.2.0-DEBUG
-- Execution Date: $(date)
-- Debug Mode: $DEBUG_MODE
-- Test Mode: $TEST_MODE
-- Safe Mode: $SAFE_MODE
-
-IDENTIFIED ISSUES IN ORIGINAL SCRIPT:
-1. Missing execute permissions (chmod +x required)
-2. Root privilege requirement (must run with sudo)
-3. File truncation in some versions
-4. Missing -r flag in read commands (fixed)
-5. Incomplete error handling (enhanced)
-
-COMMON TROUBLESHOOTING STEPS:
-
-1. PERMISSION ISSUES:
-   - Make script executable: chmod +x arch-install-debug.sh
-   - Run with root privileges: sudo ./arch-install-debug.sh
-
-2. ENVIRONMENT ISSUES:
-   - Must be run from Arch Linux live environment
-   - Requires UEFI boot mode
-   - Requires internet connection
-
-3. TESTING THE SCRIPT:
-   - Test mode (no root required): ./arch-install-debug.sh --test
-   - Debug mode (verbose output): ./arch-install-debug.sh --debug
-   - Safe mode (validation only): ./arch-install-debug.sh --safe
-
-4. HARDWARE COMPATIBILITY:
-   - AMD Ryzen 9950X: Fully supported
-   - NVIDIA RTX 5090: Supported with open-source drivers
-   - MediaTek MT7927 WiFi: Limited support (see wireless info)
-
-5. SCRIPT DEBUGGING:
-   - Check syntax: bash -n arch-install-debug.sh
-   - Run with tracing: bash -x arch-install-debug.sh
-   - Check logs in /tmp/arch_debug.log
-
-NEXT STEPS:
-1. Make the script executable: chmod +x ~/arch-install-debug.sh
-2. Test the script: ./arch-install-debug.sh --test
-3. Run in debug mode: ./arch-install-debug.sh --debug
-4. For actual installation: sudo ./arch-install-debug.sh
-
-SUPPORT:
-- Check Arch Linux wiki: https://wiki.archlinux.org/
-- Arch Linux forums: https://bbs.archlinux.org/
-- IRC: #archlinux on Libera.Chat
-
-EOF
-
-    print_success "Troubleshooting information saved to: $info_file"
 }
 
 # ====
 # SCRIPT EXECUTION
 # ====
 
-# Check if running as root (unless in test mode)
-if [[ $EUID -ne 0 ]] && [[ "$TEST_MODE" != "true" ]] && [[ "$SAFE_MODE" != "true" ]]; then
-    print_error "This script must be run as root (from Arch Linux live environment)"
-    print_status "To test the script without root: $0 --test"
-    print_status "To run safely without installation: $0 --safe"
-    print_status "For actual installation: sudo $0"
-    exit 1
+# Check if running as root
+if [[ $EUID -ne 0 ]]; then
+    error_exit "This script must be run as root (from Arch Linux live environment)"
 fi
 
 # FIXED: Added the missing main function call that was causing the hang
