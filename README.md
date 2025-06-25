@@ -3,5 +3,7 @@ Scripts that deletes all partitions and installs Arch Linux with Nvidia drivers 
 
 In development, currently not working
 <br>
-To run just type: curl -O ( `https://raw.githubusercontent.com/yourusername/yourrepo/main/arch-install.sh && chmod +x arch-install.sh && ./arch-install.sh` )
+To run just type: curl -O 
+<br>
+`https://raw.githubusercontent.com/yourusername/yourrepo/main/arch-install.sh && chmod +x arch-install.sh && ./arch-install.sh`
 
