@@ -295,22 +295,24 @@ confirm() {
 }
 
 # Secure password input - FIXED: Added -r flag to read
+
 read_password() {
     local prompt="$1"
     local password
     local password_confirm
-    
+
     while true; do
-        echo -n "$prompt: "
+        echo -en "$prompt (input hidden): "
         read -r -s password
         echo
-        echo -n "Confirm password: "
+        echo -n "Confirm password (input hidden): "
         read -r -s password_confirm
         echo
-        
+
         if [[ "$password" == "$password_confirm" ]]; then
             if [[ ${#password} -ge 8 ]]; then
                 echo "$password"
+                print_success "Password accepted"
                 return 0
             else
                 print_error "Password must be at least 8 characters long."
@@ -320,6 +322,7 @@ read_password() {
         fi
     done
 }
+
 
 # ====
 # DEPENDENCY AND ENVIRONMENT CHECKING
@@ -403,6 +406,7 @@ check_environment() {
 # ====
 
 get_user_input() {
+    print_status "Starting user configuration..."
     print_header "System Configuration"
     
     # In test mode or safe mode, use default values
@@ -418,6 +422,7 @@ get_user_input() {
     
     # Username
     while [[ -z "$USERNAME" ]]; do
+        print_status "Prompting for username..."
         read -r -p "Enter username: " USERNAME
         if [[ ! "$USERNAME" =~ ^[a-z_][a-z0-9_-]*$ ]]; then
             print_error "Invalid username. Use lowercase letters, numbers, underscore, and hyphen only."
@@ -428,6 +433,7 @@ get_user_input() {
     
     # Hostname - FIXED: This was the main hanging point
     while [[ -z "$HOSTNAME" ]]; do
+        print_status "Prompting for hostname..."
         read -r -p "Enter hostname: " HOSTNAME
         if [[ ! "$HOSTNAME" =~ ^[a-zA-Z0-9-]+$ ]]; then
             print_error "Invalid hostname. Use letters, numbers, and hyphens only."
@@ -437,7 +443,9 @@ get_user_input() {
     log_debug "Hostname set: $HOSTNAME"
     
     # Passwords
+    print_status "Prompting for root password..."
     ROOT_PASSWORD=$(read_password "Enter root password")
+    print_status "Prompting for user password..."
     USER_PASSWORD=$(read_password "Enter user password")
     log_debug "Passwords set"
     
