@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Arch Linux GNOME TUI Installer — Screen Preview</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #0a0e1a; display: flex; flex-direction: column; align-items: center;
+       justify-content: flex-start; min-height: 100vh; padding: 24px 12px;
+       font-family: 'Courier New', Courier, monospace; }
+
+.page-title { color: #4d7cc7; font-size: 13px; margin-bottom: 14px; letter-spacing: 1px; }
+
+/* ── Terminal window ── */
+.term { width: 680px; max-width: 100%; background: #0a1020; border-radius: 10px;
+         overflow: hidden; box-shadow: 0 0 40px #000a; }
+.term-bar { background: #151f35; display: flex; align-items: center; gap: 8px;
+             padding: 8px 14px; border-bottom: 1px solid #1e2e50; }
+.dot { width: 12px; height: 12px; border-radius: 50%; }
+.term-label { color: #5a6e99; font-size: 11px; margin-left: auto; }
+.screen { background: #080f20; padding: 8px 10px 0; }
+.backtitle { color: #3a6aaa; font-size: 11px; padding: 2px 4px 5px;
+              border-bottom: 1px solid #111e3a; margin-bottom: 8px; }
+.stage { min-height: 380px; display: flex; align-items: center; justify-content: center;
+          padding: 6px 8px 10px; }
+
+/* ── Dialog box ── */
+.dlg { background: #152645; border: 1px solid #2e5090; width: 100%; max-width: 580px; }
+.dlg-title { background: #0e1e3c; text-align: center; padding: 4px 14px;
+              color: #d0e4ff; font-weight: bold; border-bottom: 1px solid #2e5090; }
+.dlg-body { padding: 14px 18px; color: #b8cce8; min-height: 220px;
+             font-size: 12.5px; line-height: 1.55; }
+.dlg-btns { background: #080f20; padding: 8px 14px; display: flex;
+              justify-content: center; gap: 20px; border-top: 1px solid #1e3560; }
+
+/* Buttons */
+.btn-p { background: #00aac8; color: #000; padding: 2px 16px; cursor: pointer;
+           font-family: monospace; font-size: 13px; border: none; }
+.btn-p:hover { background: #00c8e8; }
+.btn-s { background: #152645; color: #a0bcd8; padding: 2px 16px; cursor: pointer;
+           font-family: monospace; font-size: 13px; border: 1px solid #3a6098; }
+.btn-s:hover { background: #1e3560; }
+
+/* Colors */
+.hl  { color: #00e0ff; }
+.red { color: #ff6060; }
+.grn { color: #00dd88; }
+.yel { color: #ffd060; }
+.mu  { color: #5a7099; }
+
+/* Form */
+.form-row { display: flex; align-items: center; gap: 8px; margin: 5px 0; }
+.form-lbl { color: #7aa0c8; min-width: 130px; text-align: right; font-size: 12px; }
+.form-inp  { background: #040c1c; border: 1px solid #2e5090; color: #90bce0;
+              padding: 2px 8px; font-family: monospace; font-size: 12px; width: 200px; }
+.form-pw   { background: #040c1c; border: 1px solid #2e5090; color: #202840;
+              padding: 2px 8px; font-family: monospace; font-size: 12px; width: 200px;
+              letter-spacing: 4px; }
+
+/* Lists */
+.list-box { border: 1px solid #1e3a6a; max-height: 170px; overflow-y: auto;
+             font-size: 12px; background: #040c1c; }
+.list-item { padding: 2px 10px; color: #90acd0; cursor: pointer; display: flex; gap: 12px; }
+.list-item:hover { background: #0e1e3c; }
+.list-item.sel { background: #00aac8; color: #000; }
+.chk-item { padding: 3px 10px; display: flex; align-items: center; gap: 10px;
+             color: #90acd0; cursor: pointer; font-size: 12px; }
+.chk-item:hover { background: #0e1e3c; }
+.chkbox { color: #00e0ff; }
+
+/* Gauge */
+.gauge-wrap { border: 1px solid #2e5090; background: #040c1c; height: 18px; margin: 8px 0; }
+.gauge-bar  { height: 100%; background: #00aac8; transition: width 0.5s ease;
+               display: flex; align-items: center; justify-content: flex-end;
+               padding-right: 5px; font-size: 10px; color: #000; font-weight: bold; }
+.step-log   { height: 120px; overflow-y: auto; border: 1px solid #0e2040;
+               background: #030a18; padding: 4px 6px; font-size: 10.5px; line-height: 1.6; }
+.step-done   { color: #00cc77; }
+.step-active { color: #ffd060; }
+.step-wait   { color: #3a5a7a; }
+.sep { color: #1e3a6a; margin: 8px 0; border: none; border-top: 1px solid #1e3a6a; }
+
+/* Nav */
+.nav-row { width: 680px; max-width: 100%; display: flex; align-items: center;
+            justify-content: space-between; padding: 10px 4px 0; }
+.nav-btn { background: #0e1830; color: #5a8aaa; border: 1px solid #1e3060;
+            padding: 5px 18px; font-size: 11px; cursor: pointer;
+            font-family: monospace; border-radius: 3px; }
+.nav-btn:hover:not(:disabled) { background: #182840; color: #80b0d0; }
+.nav-btn:disabled { opacity: 0.25; cursor: default; }
+.pips { display: flex; gap: 6px; }
+.pip { width: 9px; height: 9px; border-radius: 50%; background: #1e3050; }
+.pip.active { background: #00aac8; }
+.pip.done   { background: #009966; }
+</style>
+</head>
+<body>
+<p class="page-title">⚡ arch-install-tui.sh — Screen Preview</p>
+
+<div class="term">
+  <div class="term-bar">
+    <div class="dot" style="background:#ff5f57"></div>
+    <div class="dot" style="background:#febc2e"></div>
+    <div class="dot" style="background:#28c840"></div>
+    <div class="term-label">root@archiso — ./arch-install-tui.sh</div>
+  </div>
+  <div class="screen">
+    <div class="backtitle">&nbsp; Arch Linux &nbsp;∙&nbsp; GNOME 50+ &nbsp;∙&nbsp; RTX 5090 &nbsp;∙&nbsp; Ryzen 9950X &nbsp;∙&nbsp; v1.0.0 &nbsp;</div>
+    <div class="stage" id="stage"></div>
+  </div>
+</div>
+
+<div class="nav-row">
+  <button class="nav-btn" id="btn-back" onclick="go(-1)">◀  Back</button>
+  <div class="pips" id="pips"></div>
+  <button class="nav-btn" id="btn-next" onclick="go(1)">Next  ▶</button>
+</div>
+
+<script>
+/* ── State ────────────────────────────────────────────────── */
+let cur = 0;
+let gTimer = null;
+let gStep  = 0;
+
+const SCREENS = [
+  { title:' Welcome ',              fn: sWelcome   },
+  { title:' Pre-flight Checks ',    fn: sPreflight },
+  { title:' User Account ',         fn: sAccount   },
+  { title:' Timezone ',             fn: sTimezone  },
+  { title:' Disk Selection ',       fn: sDisk      },
+  { title:' Feature Selection ',    fn: sFeatures  },
+  { title:' Installation Summary ', fn: sSummary   },
+  { title:' Installing Arch Linux ',fn: sProgress  },
+  { title:' ✔ Installation Complete ', fn: sComplete },
+];
+
+/* ── Helpers ─────────────────────────────────────────────── */
+function go(d) {
+  clearInterval(gTimer);
+  cur = Math.max(0, Math.min(SCREENS.length - 1, cur + d));
+  render();
+  if (cur === 7) startGauge();
+}
+
+function mkBtn(label, primary, clickFn) {
+  const cls = primary ? 'btn-p' : 'btn-s';
+  return `<button class="${cls}" onclick="${clickFn}">${label}</button>`;
+}
+
+function render() {
+  const s = SCREENS[cur];
+  const { body, btns } = s.fn();
+  document.getElementById('stage').innerHTML = `
+    <div class="dlg">
+      <div class="dlg-title">${s.title}</div>
+      <div class="dlg-body">${body}</div>
+      <div class="dlg-btns">${btns}</div>
+    </div>`;
+
+  document.getElementById('btn-back').disabled = cur === 0;
+  document.getElementById('btn-next').disabled = cur === SCREENS.length - 1;
+
+  document.getElementById('pips').innerHTML =
+    SCREENS.map((_,i) =>
+      `<div class="pip ${i===cur?'active':i<cur?'done':''}"></div>`
+    ).join('');
+}
+
+/* ── Screen renderers ────────────────────────────────────── */
+function sWelcome() {
+  return {
+    body: `
+<pre style="color:#1a4a8a;font-size:10.5px;line-height:1.3;margin-bottom:8px">
+   _____            __       __    _
+  /  _  \\ ________/ /_     / /   (_)__  __  ___  _  __
+ /  /_\\  / ___/ __/ __ \\  / /   / / _ \\/ / / / |/_/
+/    |   / /  / /__/ / / // /___/ /  __/ /_/ /&gt;  &lt;
+\\____|__/_/   \\___/_/ /_//_____/_/\\___/\\____/_/|_|</pre>
+<p style="color:#7aaad0;margin-bottom:10px;font-size:12px">This wizard installs Arch Linux with the GNOME 50 desktop environment.</p>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:12px;margin-bottom:10px">
+  <span><span class="yel">●</span> AMD Ryzen 9 9950X</span>
+  <span><span class="yel">●</span> NVIDIA RTX 5090</span>
+  <span><span class="yel">●</span> ASRock X670E Taichi</span>
+  <span><span class="yel">●</span> Norwegian keyboard</span>
+  <span><span class="yel">●</span> GNOME 50 + GDM + Wayland</span>
+  <span><span class="yel">●</span> Secure Boot via sbctl</span>
+</div>
+<hr class="sep">
+<p style="color:#ff7070;font-size:11px">⚠&nbsp; The selected disk will be <strong>COMPLETELY ERASED</strong>. Back up your data first.</p>`,
+    btns: mkBtn('  Begin  ', true, 'go(1)') + mkBtn('  Exit  ', false, '')
+  };
+}
+
+function sPreflight() {
+  return {
+    body: `
+<p style="color:#7aaad0;margin-bottom:12px;font-size:12px">Checking system requirements...</p>
+<div style="display:flex;flex-direction:column;gap:6px;font-size:12.5px;margin-bottom:12px">
+  <div><span class="grn">✔</span>&nbsp; UEFI boot mode detected</div>
+  <div><span class="grn">✔</span>&nbsp; Internet connection available <span class="mu">(ping archlinux.org)</span></div>
+  <div><span class="grn">✔</span>&nbsp; <span class="hl">dialog</span> is installed</div>
+  <div><span class="grn">✔</span>&nbsp; System clock synchronised <span class="mu">(NTP)</span></div>
+</div>
+<hr class="sep">
+<p style="color:#7aaad0;margin-bottom:6px;font-size:12px">Detected hardware:</p>
+<div style="font-size:11.5px;color:#5a8aaa;line-height:1.8">
+  CPU &nbsp;&nbsp; AMD Ryzen 9 9950X &nbsp;(16c / 32t &nbsp;@&nbsp;4.3 GHz)<br>
+  GPU &nbsp;&nbsp; NVIDIA RTX 5090 &nbsp;(32 GB VRAM)<br>
+  RAM &nbsp;&nbsp; 64 GB DDR5-6000<br>
+  Disk &nbsp; nvme0n1 &nbsp;2.0 TB &nbsp;Samsung 990 Pro<br>
+  WiFi &nbsp; MediaTek MT7927 &nbsp;<span class="yel">⚠ limited kernel support</span>
+</div>`,
+    btns: mkBtn('  Continue  ', true, 'go(1)') + mkBtn('  Back  ', false, 'go(-1)')
+  };
+}
+
+function sAccount() {
+  return {
+    body: `
+<p style="color:#7aaad0;margin-bottom:10px;font-size:12px">Create your user account. Password fields are hidden.</p>
+<div style="display:flex;flex-direction:column;gap:7px">
+  <div class="form-row">
+    <span class="form-lbl">Username :</span>
+    <input class="form-inp" value="bjorn" readonly>
+    <span class="grn" style="font-size:11px">✔</span>
+  </div>
+  <div class="form-row">
+    <span class="form-lbl">Hostname :</span>
+    <input class="form-inp" value="archbox" readonly>
+    <span class="grn" style="font-size:11px">✔</span>
+  </div>
+  <div class="form-row">
+    <span class="form-lbl">Root password :</span>
+    <input class="form-pw" value="          " readonly>
+    <span class="grn" style="font-size:11px">✔</span>
+  </div>
+  <div class="form-row">
+    <span class="form-lbl">Root confirm :</span>
+    <input class="form-pw" value="          " readonly>
+  </div>
+  <div class="form-row">
+    <span class="form-lbl">User password :</span>
+    <input class="form-pw" value="        " readonly>
+    <span class="grn" style="font-size:11px">✔</span>
+  </div>
+</div>
+<p style="margin-top:10px;font-size:10.5px;color:#3a5a7a">Tab / arrow keys move between fields &nbsp;·&nbsp; Enter to confirm</p>`,
+    btns: mkBtn('  OK  ', true, 'go(1)') + mkBtn('  Back  ', false, 'go(-1)')
+  };
+}
+
+function sTimezone() {
+  const zones = [
+    'America/New_York','America/Chicago','America/Los_Angeles',
+    'Europe/London','Europe/Dublin','Europe/Oslo','Europe/Stockholm',
+    'Europe/Berlin','Europe/Paris','Europe/Helsinki',
+    'Asia/Tokyo','Asia/Singapore','Australia/Sydney'
+  ];
+  const rows = zones.map((z,i) => {
+    const sel = i === 5;
+    return `<div class="list-item${sel?' sel':''}">
+      <span style="min-width:18px">${sel?'(*)':'( )'}</span>
+      <span>${z}</span>
+    </div>`;
+  }).join('');
+  return {
+    body: `
+<p style="color:#7aaad0;margin-bottom:8px;font-size:12px">Select your timezone. Space to select, Enter to confirm.</p>
+<div class="list-box">${rows}</div>
+<p style="margin-top:8px;font-size:11.5px;color:#5a8aaa">Selected: <span class="hl">Europe/Oslo</span></p>`,
+    btns: mkBtn('  OK  ', true, 'go(1)') + mkBtn('  Back  ', false, 'go(-1)')
+  };
+}
+
+function sDisk() {
+  return {
+    body: `
+<p class="red" style="margin-bottom:8px;font-size:12px">⚠&nbsp; The selected disk will be <strong>COMPLETELY ERASED</strong>.</p>
+<p style="color:#7aaad0;margin-bottom:6px;font-size:12px">Choose the target installation disk:</p>
+<div class="list-box">
+  <div class="list-item sel">
+    <span style="min-width:130px">/dev/nvme0n1</span>
+    <span style="min-width:60px">2.0 TB</span>
+    <span>Samsung 990 Pro NVMe</span>
+  </div>
+  <div class="list-item">
+    <span style="min-width:130px">/dev/sda</span>
+    <span style="min-width:60px">500 GB</span>
+    <span>WDC WD5000AAKX-00</span>
+  </div>
+</div>
+<div style="margin-top:10px;border:1px solid #6a1010;background:#120404;padding:7px 10px;font-size:11.5px">
+  <span class="red">CONFIRM:</span> Permanently destroy all data on <span class="hl">/dev/nvme0n1</span>?
+  <br>There is <strong>NO undo</strong>.
+</div>`,
+    btns: mkBtn('  ERASE &amp; INSTALL  ', true, 'go(1)') + mkBtn('  Back  ', false, 'go(-1)')
+  };
+}
+
+function sFeatures() {
+  const items = [
+    { label:'Secure Boot  (sbctl, self-signed keys — no MS cert needed)', on:true  },
+    { label:'Full development environment  (Docker, Rust, Node, Python)', on:true  },
+    { label:'yay AUR helper + VS Code, Brave, Postman, auto-cpufreq',    on:true  },
+    { label:'Gaming stack  (Steam, Lutris, Wine, MangoHud, GameMode)',   on:true  },
+  ];
+  return {
+    body: `
+<p style="color:#7aaad0;margin-bottom:10px;font-size:12px">Select optional components. Space to toggle, Enter to confirm.</p>
+<div style="display:flex;flex-direction:column;gap:2px">
+  ${items.map(i=>`
+  <div class="chk-item">
+    <span class="chkbox">${i.on?'[x]':'[ ]'}</span>
+    <span>${i.label}</span>
+  </div>`).join('')}
+</div>
+<hr class="sep">
+<p style="font-size:11px;color:#3a5a7a">Always included: GNOME 50+, GDM, NVIDIA open drivers, AMD µcode, Norwegian keyboard, UFW firewall</p>`,
+    btns: mkBtn('  OK  ', true, 'go(1)') + mkBtn('  Back  ', false, 'go(-1)')
+  };
+}
+
+function sSummary() {
+  const rows = [
+    ['Username',    'bjorn'],
+    ['Hostname',    'archbox'],
+    ['Timezone',    'Europe/Oslo'],
+    ['Target disk', '/dev/nvme0n1 &nbsp;(2.0 TB)'],
+    ['Kernel',      'linux 7.x &nbsp;+&nbsp; linux-lts (fallback)'],
+    ['Desktop',     'GNOME 50+ / GDM / Wayland'],
+    ['Graphics',    'NVIDIA RTX 5090 — nvidia-open DKMS'],
+    ['Bootloader',  'systemd-boot'],
+    ['Keyboard',    'Norwegian (no)'],
+    ['Secure Boot', 'Yes — sbctl self-signed keys'],
+    ['Dev tools',   'Yes — Docker, Rust, Node, Python'],
+    ['AUR',         'Yes — yay + VS Code, Brave, Postman'],
+    ['Gaming',      'Yes — Steam, Lutris, Wine, MangoHud'],
+  ];
+  return {
+    body: `
+<p class="red" style="margin-bottom:8px;font-size:11.5px">Once you press Install Now, the disk will be erased. No going back.</p>
+<div style="display:grid;grid-template-columns:auto 1fr;gap:1px 14px;font-size:11.5px;line-height:1.75">
+  ${rows.map(([k,v])=>`
+  <span style="color:#6a9ac0;text-align:right;white-space:nowrap">${k}</span>
+  <span class="hl">${v}</span>`).join('')}
+</div>`,
+    btns: mkBtn('  ▶&nbsp;&nbsp;Install Now  ', true, 'go(1)') + mkBtn('  ◀&nbsp;&nbsp;Go Back  ', false, 'go(-1)')
+  };
+}
+
+const STEPS = [
+  [2,  'Wiping disk signatures...'],
+  [5,  'Partitioning /dev/nvme0n1...'],
+  [8,  'Formatting EFI (FAT32) + root (ext4)...'],
+  [11, 'Mounting partitions...'],
+  [13, 'Updating mirrors via reflector...'],
+  [16, 'pacstrap: base base-devel linux linux-lts...'],
+  [28, 'pacstrap: linux-firmware amd-ucode dkms...'],
+  [36, 'Generating /etc/fstab...'],
+  [38, 'Configuring locale, hostname, keyboard...'],
+  [41, 'Removing kms hook, adding nvidia modules...'],
+  [44, 'mkinitcpio -P (building initramfs)...'],
+  [47, 'Installing systemd-boot...'],
+  [50, 'Creating bootloader entries (7.x + LTS)...'],
+  [53, 'Installing NVIDIA RTX 5090 open drivers (DKMS)...'],
+  [58, 'Configuring DKMS signing helper for Secure Boot...'],
+  [62, 'Installing GNOME 50+ + GDM...'],
+  [68, 'Enabling GDM + PipeWire services...'],
+  [72, 'Installing applications (firefox, libreoffice...)...'],
+  [78, 'Installing dev tools (docker, rust, nodejs...)...'],
+  [82, 'AMD Ryzen 9950X: performance governor service...'],
+  [84, 'Configuring UFW firewall...'],
+  [87, 'Installing sbctl, staging secure boot script...'],
+  [90, 'Installing yay AUR helper...'],
+  [93, 'AUR: zenpower3-dkms, vscode-bin, brave-bin...'],
+  [96, 'Creating user scripts and guides...'],
+  [98, 'sync && umount -R /mnt...'],
+  [100,'Installation complete!'],
+];
+
+function sProgress() {
+  return {
+    body: `
+<div style="display:flex;justify-content:space-between;align-items:center;font-size:11.5px;margin-bottom:4px">
+  <span id="g-msg" style="color:#ffd060">Initialising...</span>
+  <span id="g-pct" style="color:#00e0ff;min-width:30px;text-align:right">0%</span>
+</div>
+<div class="gauge-wrap">
+  <div class="gauge-bar" id="g-bar" style="width:0%">&nbsp;</div>
+</div>
+<div class="step-log" id="g-log"></div>
+<p style="margin-top:6px;font-size:10.5px;color:#2a4a6a">Log: /tmp/arch-install.log &nbsp;·&nbsp; Do not power off or reboot</p>`,
+    btns: `<span style="color:#3a6090;font-size:11px;font-style:italic">Installation in progress — please wait...</span>`
+  };
+}
+
+function sComplete() {
+  return {
+    body: `
+<p style="color:#00dd88;font-size:14px;margin-bottom:10px">✔&nbsp; Arch Linux GNOME installed successfully!</p>
+<div style="display:grid;grid-template-columns:auto 1fr;gap:2px 14px;font-size:12.5px;line-height:1.9;margin-bottom:10px">
+  <span style="color:#6a9ac0">Username</span><span class="hl">bjorn</span>
+  <span style="color:#6a9ac0">Hostname</span><span class="hl">archbox</span>
+  <span style="color:#6a9ac0">Disk</span><span class="hl">/dev/nvme0n1</span>
+  <span style="color:#6a9ac0">Duration</span><span class="hl">~28 minutes</span>
+</div>
+<hr class="sep">
+<div style="font-size:11.5px;color:#7aaad0;line-height:1.9">
+  <span class="yel">1.</span> Remove the USB installation media<br>
+  <span class="yel">2.</span> Reboot: <span class="hl">reboot</span><br>
+  <span class="yel">3.</span> Log in, then run: <span class="hl">sudo /setup_secure_boot.sh</span><br>
+  <span class="yel">4.</span> Finish dev environment: <span class="hl">~/setup-dev-env.sh</span><br>
+  <span class="yel">5.</span> Full guide: <span class="hl">~/POST_INSTALL_GUIDE.md</span>
+</div>`,
+    btns: mkBtn('  Reboot Now  ', true, '') + mkBtn('  View Log  ', false, '')
+  };
+}
+
+/* ── Gauge animation ──────────────────────────────────────── */
+function startGauge() {
+  gStep = 0;
+  let lastPct = 0;
+  clearInterval(gTimer);
+  gTimer = setInterval(() => {
+    if (gStep >= STEPS.length) { clearInterval(gTimer); return; }
+    const [pct, msg] = STEPS[gStep++];
+    const bar = document.getElementById('g-bar');
+    const pctEl = document.getElementById('g-pct');
+    const msgEl = document.getElementById('g-msg');
+    const log   = document.getElementById('g-log');
+    if (!bar) { clearInterval(gTimer); return; }
+    bar.style.width = pct + '%';
+    pctEl.textContent = pct + '%';
+    msgEl.textContent = msg;
+    const line = document.createElement('div');
+    line.className = pct === 100 ? 'step-done' : 'step-active';
+    line.textContent = (pct === 100 ? '✔  ' : '›  ') + msg;
+    // mark previous active lines as done
+    log.querySelectorAll('.step-active').forEach(el => {
+      el.className = 'step-done';
+      el.textContent = '✔  ' + el.textContent.slice(3);
+    });
+    log.appendChild(line);
+    log.scrollTop = log.scrollHeight;
+  }, 750);
+}
+
+/* ── Init ──────────────────────────────────────────────────── */
+render();
+</script>
+</body>
+</html>
