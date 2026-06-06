@@ -212,12 +212,13 @@ screen_user_account() {
 Username must be lowercase, starting with a letter.
 Passwords must be at least 8 characters.
 " \
-            16 64 5 \
-            "Username    :"  1 1  "$CFG_USERNAME"    1 16  28 32  0 \
-            "Hostname    :"  2 1  "$CFG_HOSTNAME"    2 16  28 63  0 \
-            "Root password :" 3 1 ""                 3 16  28 64  1 \
-            "Root confirm  :" 4 1 ""                 4 16  28 64  1 \
-            "User password :" 5 1 ""                 5 16  28 64  1 \
+            20 68 6 \
+            "Username      :" 1 1  "$CFG_USERNAME"    1 17  28 32  0 \
+            "Hostname      :" 2 1  "$CFG_HOSTNAME"    2 17  28 63  0 \
+            "Root password :" 3 1  ""                 3 17  28 64  1 \
+            "Root confirm  :" 4 1  ""                 4 17  28 64  1 \
+            "User password :" 5 1  ""                 5 17  28 64  1 \
+            "User confirm  :" 6 1  ""                 6 17  28 64  1 \
             || return 1
 
         # Parse form output (one value per line)
@@ -231,6 +232,7 @@ Passwords must be at least 8 characters.
         local rpass="${fields[2]:-}"
         local rpass2="${fields[3]:-}"
         local upass="${fields[4]:-}"
+        local upass2="${fields[5]:-}"
 
         # Validation
         local errs=""
@@ -244,6 +246,8 @@ Passwords must be at least 8 characters.
             errs+="\Z1  ✗\Zn  Root passwords do not match\n"
         [[ ${#upass} -lt 8 ]] && \
             errs+="\Z1  ✗\Zn  User password too short (minimum 8 characters)\n"
+        [[ "$upass" != "$upass2" ]] && \
+            errs+="\Z1  ✗\Zn  User passwords do not match\n"
 
         if [[ -n "$errs" ]]; then
             dlg \
