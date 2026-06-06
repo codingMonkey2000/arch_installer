@@ -20,7 +20,7 @@ set -uo pipefail
 
 # ── Constants ────────────────────────────────────────────────────────────────
 
-readonly VERSION="1.0.0"
+readonly VERSION="1.0.1-fixed"
 readonly BACKTITLE="  Arch Linux  ∙  GNOME 50+  ∙  RTX 5090  ∙  Ryzen 9950X  ∙  v${VERSION}  "
 readonly LOG_FILE="/tmp/arch-install.log"
 
@@ -35,12 +35,14 @@ CFG_TIMEZONE="Europe/Oslo"
 CFG_SECURE_BOOT="yes"
 CFG_DEV_TOOLS="yes"
 CFG_WIPE_CONFIRMED="no"
+CFG_GAMING="yes"
+CFG_AUR="yes"
 
 # ── Package lists (same as arch-install-fixed.sh) ────────────────────────────
 
 BASE_PACKAGES="base base-devel linux linux-lts linux-firmware amd-ucode \
 systemd efibootmgr networkmanager sudo nano vim git wget curl reflector \
-dkms linux-headers linux-lts-headers"
+dosfstools gptfdisk dkms linux-headers linux-lts-headers"
 
 DESKTOP_PACKAGES="gnome gnome-extra gdm xdg-desktop-portal-gnome \
 xdg-user-dirs xorg-xwayland mesa vulkan-radeon lib32-mesa \
@@ -48,7 +50,7 @@ pipewire pipewire-alsa pipewire-pulse pipewire-jack wireplumber \
 pavucontrol alsa-utils ttf-dejavu ttf-liberation noto-fonts \
 noto-fonts-emoji ttf-roboto ttf-opensans adobe-source-code-pro-fonts"
 
-NVIDIA_PACKAGES="nvidia-open nvidia-utils nvidia-settings lib32-nvidia-utils egl-wayland"
+NVIDIA_PACKAGES="nvidia-open-dkms nvidia-utils nvidia-settings lib32-nvidia-utils egl-wayland"
 
 DEV_PACKAGES="cmake make gcc clang gdb valgrind strace python python-pip \
 python-virtualenv nodejs npm go rust rustup jdk-openjdk maven \
@@ -57,7 +59,7 @@ git-lfs meson ninja flatpak"
 
 APP_PACKAGES="firefox thunderbird libreoffice-fresh evince gnome-text-editor \
 gnome-calculator file-roller baobab gnome-screenshot mpv vlc gimp \
-inkscape kdenlive audacity obs-studio neovim emacs htop btop neofetch \
+inkscape kdenlive audacity obs-studio neovim emacs htop btop fastfetch \
 tree unzip p7zip rsync tmux zsh fish flameshot eza bat ripgrep fd \
 fzf zoxide starship steam lutris wine gamemode mangohud keepassxc \
 ufw fail2ban clamav rkhunter nmap wireshark-qt openvpn wireguard-tools"
@@ -132,7 +134,7 @@ This wizard will guide you through a complete installation of
 Arch Linux with the GNOME 50 desktop environment, optimised for:
 
   \Z3●\Zn  AMD Ryzen 9 9950X
-  \Z3●\Zn  NVIDIA RTX 5090  (nvidia-open DKMS drivers)
+  \Z3●\Zn  NVIDIA RTX 5090  (nvidia-open-dkms drivers)
   \Z3●\Zn  ASRock X670E Taichi
   \Z3●\Zn  Norwegian keyboard layout
   \Z3●\Zn  Secure Boot via sbctl (self-signed, no MS cert required)
@@ -212,13 +214,12 @@ screen_user_account() {
 Username must be lowercase, starting with a letter.
 Passwords must be at least 8 characters.
 " \
-            20 68 6 \
-            "Username      :" 1 1  "$CFG_USERNAME"    1 17  28 32  0 \
-            "Hostname      :" 2 1  "$CFG_HOSTNAME"    2 17  28 63  0 \
-            "Root password :" 3 1  ""                 3 17  28 64  1 \
-            "Root confirm  :" 4 1  ""                 4 17  28 64  1 \
-            "User password :" 5 1  ""                 5 17  28 64  1 \
-            "User confirm  :" 6 1  ""                 6 17  28 64  1 \
+            16 64 5 \
+            "Username    :"  1 1  "$CFG_USERNAME"    1 16  28 32  0 \
+            "Hostname    :"  2 1  "$CFG_HOSTNAME"    2 16  28 63  0 \
+            "Root password :" 3 1 ""                 3 16  28 64  1 \
+            "Root confirm  :" 4 1 ""                 4 16  28 64  1 \
+            "User password :" 5 1 ""                 5 16  28 64  1 \
             || return 1
 
         # Parse form output (one value per line)
@@ -232,7 +233,6 @@ Passwords must be at least 8 characters.
         local rpass="${fields[2]:-}"
         local rpass2="${fields[3]:-}"
         local upass="${fields[4]:-}"
-        local upass2="${fields[5]:-}"
 
         # Validation
         local errs=""
@@ -246,8 +246,8 @@ Passwords must be at least 8 characters.
             errs+="\Z1  ✗\Zn  Root passwords do not match\n"
         [[ ${#upass} -lt 8 ]] && \
             errs+="\Z1  ✗\Zn  User password too short (minimum 8 characters)\n"
-        [[ "$upass" != "$upass2" ]] && \
-            errs+="\Z1  ✗\Zn  User passwords do not match\n"
+        [[ "$rpass" == *":"* || "$upass" == *":"* ]] && \
+            errs+="\Z1  ✗\Zn  Passwords cannot contain ':' because chpasswd uses colon separators\n"
 
         if [[ -n "$errs" ]]; then
             dlg \
@@ -431,7 +431,7 @@ Review your configuration before installation begins.
   \ZbGaming stack\ZB    :  ${CFG_GAMING}
   \ZbKernel\ZB          :  linux (7.x) + linux-lts (fallback)
   \ZbDesktop\ZB         :  GNOME 50+  /  GDM  /  Wayland
-  \ZbGraphics\ZB        :  NVIDIA RTX 5090 (nvidia-open DKMS)
+  \ZbGraphics\ZB        :  NVIDIA RTX 5090 (nvidia-open-dkms)
   \ZbBootloader\ZB      :  systemd-boot
   \ZbKeyboard\ZB        :  Norwegian (no)
 
@@ -494,7 +494,15 @@ step_pacstrap() {
     pacman -Sy --noconfirm >> "$LOG_FILE" 2>&1 || true
     # shellcheck disable=SC2086
     run pacstrap /mnt $BASE_PACKAGES
-    run genfstab -U /mnt >> /mnt/etc/fstab
+    log "RUN: genfstab -U /mnt >> /mnt/etc/fstab"
+    if ! genfstab -U /mnt >> /mnt/etc/fstab 2>> "$LOG_FILE"; then
+        loge "Command failed: genfstab -U /mnt"
+        return 1
+    fi
+    if [[ ! -s /mnt/etc/fstab ]]; then
+        loge "Generated fstab is empty"
+        return 1
+    fi
 }
 
 step_configure() {
@@ -539,14 +547,14 @@ title   Arch Linux (kernel 7+)
 linux   /vmlinuz-linux
 initrd  /amd-ucode.img
 initrd  /initramfs-linux.img
-options root=LABEL=ROOT rw nvidia_drm.modeset=1 nvidia_drm.fbdev=1
+options root=LABEL=ROOT rw nvidia_drm.modeset=1 nvidia_drm.fbdev=1 quiet
 ARC
 cat > /boot/loader/entries/arch-lts.conf << LTS
 title   Arch Linux LTS (fallback)
 linux   /vmlinuz-linux-lts
 initrd  /amd-ucode.img
 initrd  /initramfs-linux-lts.img
-options root=LABEL=ROOT rw nvidia_drm.modeset=1 nvidia_drm.fbdev=1
+options root=LABEL=ROOT rw nvidia_drm.modeset=1 nvidia_drm.fbdev=1 quiet
 LTS
 
 # Pacman hooks
@@ -557,7 +565,7 @@ Operation=Install
 Operation=Upgrade
 Operation=Remove
 Type=Package
-Target=nvidia-open
+Target=nvidia-open-dkms
 Target=linux
 Target=linux-lts
 [Action]
@@ -590,7 +598,7 @@ ENV
 
 # Accounts
 echo "root:\${RP}" | chpasswd
-useradd -m -G wheel,audio,video,optical,storage,docker -s /bin/bash "\${UN}"
+useradd -m -G wheel,audio,video -s /bin/bash "\${UN}"
 echo "\${UN}:\${UP}" | chpasswd
 echo "%wheel ALL=(ALL:ALL) ALL" >> /etc/sudoers
 
@@ -603,6 +611,8 @@ CONF_EOF
     run arch-chroot /mnt /do_configure.sh \
         "$CFG_TIMEZONE" "$CFG_HOSTNAME" \
         "$CFG_ROOT_PASS" "$CFG_USERNAME" "$CFG_USER_PASS"
+    # Refresh package databases after enabling [multilib] in pacman.conf.
+    run arch-chroot /mnt pacman -Sy --noconfirm
     rm -f /mnt/do_configure.sh
 }
 
@@ -611,6 +621,7 @@ step_nvidia() {
     # shellcheck disable=SC2086
     run arch-chroot /mnt pacman -S --noconfirm $NVIDIA_PACKAGES
 
+    mkdir -p /mnt/etc/modprobe.d /mnt/etc/dkms
     cat > /mnt/etc/modprobe.d/nvidia.conf << 'EOF'
 options nvidia NVreg_DynamicPowerManagement=0x02
 options nvidia NVreg_PreserveVideoMemoryAllocations=1
@@ -619,7 +630,7 @@ EOF
 
     # DKMS signing helper for Secure Boot
     cat > /mnt/etc/dkms/sign_helper.sh << 'EOF'
-#!/bin/sh
+#!/bin/bash
 KEY="/usr/share/secureboot/keys/db/db.key"
 CERT="/usr/share/secureboot/keys/db/db.pem"
 if [[ ! -f "$KEY" || ! -f "$CERT" ]]; then
@@ -713,11 +724,11 @@ Type=Package
 Target=linux
 Target=linux-lts
 Target=systemd
-Target=nvidia-open
+Target=nvidia-open-dkms
 [Action]
 Description=Signing kernel/bootloader/NVIDIA for Secure Boot
 When=PostTransaction
-Exec=/bin/sh -c 'sbctl sign-all && dkms autoinstall'
+Exec=/bin/sh -c 'sbctl status >/dev/null 2>&1 && sbctl sign-all || true; dkms autoinstall || true'
 Depends=sbctl
 EOF
 
@@ -758,8 +769,12 @@ step_user_scripts() {
 set -euo pipefail
 echo "Updating official packages..."
 sudo pacman -Syu
-echo "Updating AUR packages..."
-yay -Sua
+if command -v yay >/dev/null 2>&1; then
+    echo "Updating AUR packages..."
+    yay -Sua
+else
+    echo "yay is not installed, skipping AUR updates."
+fi
 echo "Removing orphaned packages..."
 mapfile -t orphans < <(pacman -Qtdq 2>/dev/null)
 [[ ${#orphans[@]} -gt 0 ]] && sudo pacman -Rns "${orphans[@]}" --noconfirm
@@ -831,20 +846,31 @@ EOF
 step_aur() {
     if [[ "$CFG_AUR" != "yes" ]]; then return 0; fi
     log "=== AUR HELPER + AUR PACKAGES ==="
+    run arch-chroot /mnt pacman -S --needed --noconfirm git base-devel go sudo
+
+    # Give the installer user temporary passwordless sudo only while building AUR packages.
+    mkdir -p /mnt/etc/sudoers.d
+    cat > "/mnt/etc/sudoers.d/99-arch-installer-${CFG_USERNAME}" << EOF
+${CFG_USERNAME} ALL=(ALL:ALL) NOPASSWD: ALL
+EOF
+    chmod 0440 "/mnt/etc/sudoers.d/99-arch-installer-${CFG_USERNAME}"
+
     cat > /mnt/install_yay.sh << 'EOF'
 #!/bin/bash
 set -euo pipefail
 cd /tmp
+rm -rf yay
 git clone https://aur.archlinux.org/yay.git
 cd yay
 makepkg -si --noconfirm
 cd ..
 rm -rf yay
-yay -S --noconfirm zenpower3-dkms visual-studio-code-bin brave-bin postman-bin timeshift auto-cpufreq
+yay -S --needed --noconfirm visual-studio-code-bin brave-bin postman-bin timeshift auto-cpufreq || true
 EOF
     chmod +x /mnt/install_yay.sh
     run arch-chroot /mnt runuser -u "$CFG_USERNAME" -- /install_yay.sh
     rm -f /mnt/install_yay.sh
+    rm -f "/mnt/etc/sudoers.d/99-arch-installer-${CFG_USERNAME}"
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -861,7 +887,7 @@ screen_install() {
     # Errors are caught by the run() helper which appends to $LOG_FILE.
 
     (
-        set +e  # don't abort the gauge subshell on errors; run() handles them
+        set -e
 
         gauge_update  2  "Partitioning ${CFG_DISK}..."
         step_partition
@@ -885,13 +911,13 @@ screen_install() {
         gauge_update 48  "Installing NVIDIA RTX 5090 drivers (DKMS)..."
         step_nvidia
 
-        gauge_update 57  "Installing GNOME 50+ desktop environment..."
+        gauge_update 57  "Installing GNOME desktop environment..."
         step_desktop
 
         gauge_update 70  "Installing applications..."
         step_applications
 
-        gauge_update 80  "Applying AMD Ryzen 9950X optimisations..."
+        gauge_update 80  "Applying AMD Ryzen optimisations..."
         step_amd_optimise
 
         gauge_update 83  "Configuring firewall..."
@@ -925,6 +951,12 @@ screen_install() {
   Please do not interrupt the process.
 " \
         12 72 0
+
+    local install_rc=${PIPESTATUS[0]}
+    if [[ $install_rc -ne 0 ]]; then
+        loge "Installation aborted with exit code ${install_rc}"
+        return "$install_rc"
+    fi
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1059,7 +1091,18 @@ main() {
     run_wizard
 
     # Execute installation
-    screen_install
+    if ! screen_install; then
+        dlg --title " ✗ Installation Failed " \
+            --msgbox "
+Installation failed. Check the log:
+
+  ${LOG_FILE}
+
+You can inspect it with:
+  less ${LOG_FILE}" \
+            12 68
+        return 1
+    fi
 
     # Show completion screen
     screen_complete
