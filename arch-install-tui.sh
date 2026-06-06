@@ -23,6 +23,9 @@ set -uo pipefail
 readonly VERSION="1.0.1-fixed"
 readonly BACKTITLE="  Arch Linux  ∙  GNOME 50+  ∙  RTX 5090  ∙  Ryzen 9950X  ∙  v${VERSION}  "
 readonly LOG_FILE="/tmp/arch-install.log"
+readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly HTML_PREVIEW_FILE="${SCRIPT_DIR}/arch-install-preview.html"
+readonly HTML_PREVIEW_URL="https://codingmonkey2000.github.io/arch_installer/"
 
 # ── Configuration state (populated by wizard) ────────────────────────────────
 
@@ -86,6 +89,71 @@ dlg() {
     DLGRESULT=$(cat "$tmpfile")
     rm -f "$tmpfile"
     return $rc
+}
+
+
+# ── HTML preview launcher ────────────────────────────────────────────────────
+
+open_html_preview() {
+    # The HTML preview is optional. It can only be opened when the environment has
+    # a graphical session and a browser. A normal Arch ISO TTY usually has neither.
+    local preview_path=""
+    local browser=""
+
+    if [[ -f "$HTML_PREVIEW_FILE" ]]; then
+        preview_path="$HTML_PREVIEW_FILE"
+    elif [[ -f "${SCRIPT_DIR}/arch-install-preview-v2.html" ]]; then
+        preview_path="${SCRIPT_DIR}/arch-install-preview-v2.html"
+    fi
+
+    # No graphical session means no browser window can be shown.
+    if [[ -z "${DISPLAY:-}" && -z "${WAYLAND_DISPLAY:-}" ]]; then
+        dlg --title " HTML Preview " --msgbox "
+The HTML preview is included in the GitHub repository, but this session has no graphical display.
+
+This is normal on the Arch live ISO TTY.
+
+The installer will continue with the terminal TUI.
+
+Preview URL:
+${HTML_PREVIEW_URL}
+" 14 70 || true
+        return 0
+    fi
+
+    for candidate in xdg-open firefox chromium google-chrome-stable google-chrome brave brave-browser microsoft-edge; do
+        if command -v "$candidate" &>/dev/null; then
+            browser="$candidate"
+            break
+        fi
+    done
+
+    if [[ -z "$browser" ]]; then
+        dlg --title " HTML Preview " --msgbox "
+A graphical display was detected, but no browser command was found.
+
+Install or start a browser to view the HTML preview, or open this URL manually:
+
+${HTML_PREVIEW_URL}
+
+The installer will continue with the terminal TUI.
+" 15 70 || true
+        return 0
+    fi
+
+    if [[ -n "$preview_path" ]]; then
+        "$browser" "file://${preview_path}" >/dev/null 2>&1 &
+    else
+        "$browser" "$HTML_PREVIEW_URL" >/dev/null 2>&1 &
+    fi
+
+    dlg --title " HTML Preview " --msgbox "
+The HTML preview was opened in your browser.
+
+Close or ignore the browser window when ready, then continue here.
+
+The actual installer still runs in this terminal using dialog.
+" 12 66 || true
 }
 
 # ── Logging ──────────────────────────────────────────────────────────────────
@@ -1086,6 +1154,9 @@ main() {
     # Initialise log
     : > "$LOG_FILE"
     log "=== Arch Linux GNOME TUI Installer v${VERSION} ==="
+
+    # Try to open the optional HTML preview before the real TUI installer.
+    open_html_preview
 
     # Run wizard (welcome → summary)
     run_wizard
