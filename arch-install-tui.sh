@@ -272,56 +272,89 @@ screen_preflight() {
 
 screen_user_account() {
     while true; do
-        # Mixed form: fields 0=normal, 1=normal, 2=password, 3=password
         dlg \
-            --title " User Account " \
-            --mixedform \
+            --title " Username " \
+            --inputbox \
 "
-\ZbCreate your user account and set passwords.\ZB
+Create your user account.
 
-Username must be lowercase, starting with a letter.
-Passwords must be at least 8 characters.
+Username must be lowercase and start with a letter.
+Example: bjorn
 " \
-            16 64 5 \
-            "Username    :"  1 1  "$CFG_USERNAME"    1 16  28 32  0 \
-            "Hostname    :"  2 1  "$CFG_HOSTNAME"    2 16  28 63  0 \
-            "Root password :" 3 1 ""                 3 16  28 64  1 \
-            "Root confirm  :" 4 1 ""                 4 16  28 64  1 \
-            "User password :" 5 1 ""                 5 16  28 64  1 \
+            12 60 "$CFG_USERNAME" \
             || return 1
+        local uname="$DLGRESULT"
 
-        # Parse form output (one value per line)
-        local fields=()
-        while IFS= read -r line; do
-            fields+=("$line")
-        done <<< "$DLGRESULT"
+        dlg \
+            --title " Hostname " \
+            --inputbox \
+"
+Choose a hostname for this machine.
 
-        local uname="${fields[0]:-}"
-        local hname="${fields[1]:-}"
-        local rpass="${fields[2]:-}"
-        local rpass2="${fields[3]:-}"
-        local upass="${fields[4]:-}"
+Use letters, numbers, and hyphens only.
+Example: archbox
+" \
+            12 60 "$CFG_HOSTNAME" \
+            || return 1
+        local hname="$DLGRESULT"
 
-        # Validation
+        dlg \
+            --title " Root Password " \
+            --insecure \
+            --passwordbox \
+"
+Enter the root password.
+
+Minimum 8 characters.
+The password is hidden while typing.
+" \
+            12 60 \
+            || return 1
+        local rpass="$DLGRESULT"
+
+        dlg \
+            --title " Confirm Root Password " \
+            --insecure \
+            --passwordbox \
+"
+Confirm the root password.
+" \
+            10 60 \
+            || return 1
+        local rpass2="$DLGRESULT"
+
+        dlg \
+            --title " User Password " \
+            --insecure \
+            --passwordbox \
+"
+Enter the password for user: ${uname}
+
+Minimum 8 characters.
+" \
+            12 60 \
+            || return 1
+        local upass="$DLGRESULT"
+
         local errs=""
         [[ ! "$uname" =~ ^[a-z_][a-z0-9_-]*$ ]] && \
-            errs+="\Z1  ✗\Zn  Invalid username (lowercase, starts with letter)\n"
+            errs+="\Z1  ✗\Zn  Invalid username. Use lowercase and start with a letter.\n"
         [[ ! "$hname" =~ ^[a-zA-Z0-9-]+$ ]] && \
-            errs+="\Z1  ✗\Zn  Invalid hostname (letters, numbers, hyphens only)\n"
+            errs+="\Z1  ✗\Zn  Invalid hostname. Use letters, numbers, and hyphens only.\n"
         [[ ${#rpass} -lt 8 ]] && \
-            errs+="\Z1  ✗\Zn  Root password too short (minimum 8 characters)\n"
+            errs+="\Z1  ✗\Zn  Root password too short. Minimum 8 characters.\n"
         [[ "$rpass" != "$rpass2" ]] && \
-            errs+="\Z1  ✗\Zn  Root passwords do not match\n"
+            errs+="\Z1  ✗\Zn  Root passwords do not match.\n"
         [[ ${#upass} -lt 8 ]] && \
-            errs+="\Z1  ✗\Zn  User password too short (minimum 8 characters)\n"
+            errs+="\Z1  ✗\Zn  User password too short. Minimum 8 characters.\n"
         [[ "$rpass" == *":"* || "$upass" == *":"* ]] && \
-            errs+="\Z1  ✗\Zn  Passwords cannot contain ':' because chpasswd uses colon separators\n"
+            errs+="\Z1  ✗\Zn  Passwords cannot contain ':' because chpasswd uses colon separators.\n"
 
         if [[ -n "$errs" ]]; then
             dlg \
                 --title " ✗ Validation Errors " \
                 --msgbox "\nPlease fix the following:\n\n${errs}" \
-                12 60
+                14 68
             CFG_USERNAME="$uname"
             CFG_HOSTNAME="$hname"
             continue
