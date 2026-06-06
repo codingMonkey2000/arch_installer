@@ -20,7 +20,7 @@ set -uo pipefail
 
 # ── Constants ────────────────────────────────────────────────────────────────
 
-readonly VERSION="1.0.1-fixed"
+readonly VERSION="1.0.3-full-fixed"
 readonly BACKTITLE="  Arch Linux  ∙  GNOME 50+  ∙  RTX 5090  ∙  Ryzen 9950X  ∙  v${VERSION}  "
 readonly LOG_FILE="/tmp/arch-install.log"
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -306,7 +306,7 @@ Example: archbox
 Enter the root password.
 
 Minimum 8 characters.
-The password is hidden while typing.
+Characters will appear as * while typing.
 " \
             12 60 \
             || return 1
@@ -331,6 +331,7 @@ Confirm the root password.
 Enter the password for user: ${uname}
 
 Minimum 8 characters.
+Characters will appear as * while typing.
 " \
             12 60 \
             || return 1
