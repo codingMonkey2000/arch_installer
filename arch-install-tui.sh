@@ -20,9 +20,10 @@ set -uo pipefail
 
 # ── Constants ────────────────────────────────────────────────────────────────
 
-readonly VERSION="1.2.0"
+readonly VERSION="1.2.2-full-fixed"
 readonly BACKTITLE="  Arch Linux  ∙  GNOME 50+  ∙  v${VERSION}  "
 readonly LOG_FILE="/tmp/arch-install.log"
+RUN_CONTEXT="normal"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly SCRIPT_DIR
 readonly HTML_PREVIEW_FILE="${SCRIPT_DIR}/arch-install-preview.html"
@@ -131,13 +132,32 @@ loge() { echo "[$(date '+%H:%M:%S')] ERROR: $*" >> "$LOG_FILE"; }
 
 run() {
     log "RUN: $*"
-    if ! "$@" >> "$LOG_FILE" 2>&1; then
-        loge "Command failed: $*"
-        dlg --title " ✗ Error " \
-            --msgbox "\nCommand failed:\n\n  $*\n\nSee the log for details:\n  $LOG_FILE" \
-            12 70
-        return 1
+
+    "$@" >> "$LOG_FILE" 2>&1
+    local rc=$?
+
+    if [[ $rc -ne 0 ]]; then
+        loge "Command failed (${rc}): $*"
+
+        # When the installer is inside a dialog gauge, do not open another
+        # dialog on top of it. That corrupts the gauge display. The main
+        # installer screen will show the failure after the gauge exits.
+        if [[ "${RUN_CONTEXT:-normal}" != "gauge" ]]; then
+            dlg --title " ✗ Error " \
+                --msgbox "
+Command failed:
+
+  $*
+
+See the log for details:
+  $LOG_FILE" \
+                12 70
+        fi
+
+        return "$rc"
     fi
+
+    return 0
 }
 
 # ── Cleanup ───────────────────────────────────────────────────────────────────
@@ -453,75 +473,77 @@ screen_locale() {
 # ─────────────────────────────────────────────────────────────────────────────
 
 screen_timezone() {
-    # ── Step 1: Continent / Region ────────────────────────────────────────────
-    local regions=(
-        "Africa"     "Africa"
-        "America"    "Americas"
-        "Asia"       "Asia & Middle East"
-        "Atlantic"   "Atlantic"
-        "Australia"  "Australia & Pacific"
-        "Europe"     "Europe"
-        "Indian"     "Indian Ocean"
-        "Pacific"    "Pacific"
-        "UTC"        "UTC (no DST)"
+    local items=(
+        "Europe/Oslo"         "Norway"
+        "Europe/Stockholm"    "Sweden"
+        "Europe/Copenhagen"   "Denmark"
+        "Europe/London"       "United Kingdom"
+        "Europe/Berlin"       "Germany"
+        "Europe/Paris"        "France"
+        "Europe/Helsinki"     "Finland"
+        "UTC"                 "UTC"
+        "America/New_York"    "US Eastern"
+        "America/Chicago"     "US Central"
+        "America/Los_Angeles" "US Pacific"
+        "Asia/Singapore"      "Singapore"
+        "Asia/Tokyo"          "Japan"
+        "Australia/Sydney"    "Australia Sydney"
+        "MANUAL"              "Type another timezone manually"
     )
 
-    # Guess current continent from CFG_TIMEZONE
-    local cur_region
-    cur_region=$(echo "$CFG_TIMEZONE" | cut -d/ -f1)
-    [[ -z "$cur_region" ]] && cur_region="Europe"
+    while true; do
+        dlg \
+            --title " Timezone " \
+            --default-item "${CFG_TIMEZONE:-Europe/Oslo}" \
+            --menu \
+"
+Select your timezone.
 
-    local reg_items=()
-    local r=0
-    while [[ $r -lt ${#regions[@]} ]]; do
-        local rtag="${regions[$r]}"
-        local rdesc="${regions[$((r+1))]}"
-        if [[ "$rtag" == "$cur_region" ]]; then
-            reg_items+=("$rtag" "$rdesc" "on")
-        else
-            reg_items+=("$rtag" "$rdesc" "off")
+Current/default:
+  ${CFG_TIMEZONE:-Europe/Oslo}
+
+Use arrow keys and Enter.
+" \
+            20 70 12 \
+            "${items[@]}" \
+            || return 1
+
+        local selected="${DLGRESULT:-Europe/Oslo}"
+
+        if [[ "$selected" == "MANUAL" ]]; then
+            dlg \
+                --title " Manual Timezone " \
+                --inputbox \
+"
+Type an IANA timezone.
+
+Examples:
+  Europe/Oslo
+  Europe/London
+  America/New_York
+" \
+                12 64 "${CFG_TIMEZONE:-Europe/Oslo}" \
+                || return 1
+            selected="${DLGRESULT:-Europe/Oslo}"
         fi
-        (( r+=2 ))
+
+        if [[ "$selected" == "UTC" ]] || timedatectl list-timezones 2>/dev/null | grep -qx "$selected"; then
+            CFG_TIMEZONE="$selected"
+            return 0
+        fi
+
+        dlg \
+            --title " Invalid Timezone " \
+            --msgbox \
+"
+The timezone was not recognised:
+
+  ${selected}
+
+Please select one from the list or enter a valid IANA timezone.
+" \
+            11 66
     done
-
-    dlg \
-        --title " Timezone  (1/2) " \
-        --radiolist \
-"\nSelect your region.\n" \
-        18 50 10 \
-        "${reg_items[@]}" \
-        || return 1
-
-    local selected_region="${DLGRESULT:-Europe}"
-
-    # ── Step 2: City / Zone ───────────────────────────────────────────────────
-    local zone_items=()
-    local zone
-    while IFS= read -r zone; do
-        local city
-        city=$(echo "$zone" | cut -d/ -f2-)
-        if [[ "$zone" == "$CFG_TIMEZONE" ]]; then
-            zone_items+=("$zone" "$city" "on")
-        else
-            zone_items+=("$zone" "$city" "off")
-        fi
-    done < <(timedatectl list-timezones 2>/dev/null | grep "^${selected_region}/")
-
-    # Handle UTC (no sub-zones)
-    if [[ ${#zone_items[@]} -eq 0 ]]; then
-        zone_items+=("UTC" "UTC" "on")
-    fi
-
-    dlg \
-        --title " Timezone  (2/2) " \
-        --default-item "$CFG_TIMEZONE" \
-        --radiolist \
-"\nSelect your timezone.\nUse \Zb↑↓\ZB to scroll, \ZbSpace\ZB to select.\n" \
-        24 60 16 \
-        "${zone_items[@]}" \
-        || return 1
-
-    [[ -n "$DLGRESULT" ]] && CFG_TIMEZONE="$DLGRESULT"
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -654,10 +676,64 @@ ${hyperv_line}
 #  INSTALLATION — HELPERS
 # ─────────────────────────────────────────────────────────────────────────────
 
-gauge_update() { printf '%s\nXXX\n%s\nXXX\n' "$1" "$2"; }
+gauge_update() {
+    local pct="$1"
+    local msg="$2"
+    printf 'XXX\n%s\n%s\nXXX\n' "$pct" "$msg"
+}
 
-efi_part()  { [[ "$CFG_DISK" =~ nvme ]] && echo "${CFG_DISK}p1" || echo "${CFG_DISK}1"; }
-root_part() { [[ "$CFG_DISK" =~ nvme ]] && echo "${CFG_DISK}p2" || echo "${CFG_DISK}2"; }
+part_suffix() {
+    case "$CFG_DISK" in
+        /dev/nvme*|/dev/mmcblk*) echo "p" ;;
+        *) echo "" ;;
+    esac
+}
+
+efi_part()  { echo "${CFG_DISK}$(part_suffix)1"; }
+root_part() { echo "${CFG_DISK}$(part_suffix)2"; }
+
+wait_for_partitions() {
+    local efi
+    local root
+    efi="$(efi_part)"
+    root="$(root_part)"
+
+    log "Waiting for partition nodes: ${efi}, ${root}"
+
+    partprobe "$CFG_DISK" >> "$LOG_FILE" 2>&1 || true
+    blockdev --rereadpt "$CFG_DISK" >> "$LOG_FILE" 2>&1 || true
+    udevadm settle >> "$LOG_FILE" 2>&1 || true
+    sync
+
+    local i
+    for i in {1..20}; do
+        if [[ -b "$efi" && -b "$root" ]]; then
+            log "Partition nodes are ready"
+            return 0
+        fi
+        sleep 0.5
+        partprobe "$CFG_DISK" >> "$LOG_FILE" 2>&1 || true
+        udevadm settle >> "$LOG_FILE" 2>&1 || true
+    done
+
+    loge "Partition nodes did not appear"
+    lsblk -o NAME,PATH,SIZE,TYPE,FSTYPE,LABEL,MOUNTPOINTS >> "$LOG_FILE" 2>&1 || true
+    return 1
+}
+
+log_storage_state() {
+    {
+        echo
+        echo "===== STORAGE STATE ====="
+        lsblk -o NAME,PATH,SIZE,TYPE,FSTYPE,LABEL,PARTTYPE,MOUNTPOINTS
+        echo
+        blkid || true
+        echo
+        dmesg | tail -80 || true
+        echo "========================="
+        echo
+    } >> "$LOG_FILE" 2>&1 || true
+}
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  INSTALLATION STEPS
@@ -665,44 +741,128 @@ root_part() { [[ "$CFG_DISK" =~ nvme ]] && echo "${CFG_DISK}p2" || echo "${CFG_D
 
 step_partition() {
     log "=== PARTITIONING ==="
-    umount -R /mnt 2>/dev/null || true
-    run wipefs   -af "$CFG_DISK"
-    run sgdisk   -Z  "$CFG_DISK"
-    run sgdisk   -o  "$CFG_DISK"
-    run sgdisk   -n 1:0:+1G  -t 1:ef00 -c 1:"EFI System"      "$CFG_DISK"
-    run sgdisk   -n 2:0:0    -t 2:8300 -c 2:"Linux filesystem" "$CFG_DISK"
-    run partprobe "$CFG_DISK"
-    sleep 2
+
+    umount -R /mnt >> "$LOG_FILE" 2>&1 || true
+    swapoff -a >> "$LOG_FILE" 2>&1 || true
+
+    # Clear old filesystem and partition signatures from the selected disk.
+    # This prevents the kernel from trying stale ext2/ext3/ext4 signatures.
+    run wipefs -af "$CFG_DISK"
+    run sgdisk --zap-all "$CFG_DISK"
+    run sgdisk --clear "$CFG_DISK"
+    run sgdisk --new=1:0:+1G --typecode=1:ef00 --change-name=1:"EFI System" "$CFG_DISK"
+    run sgdisk --new=2:0:0   --typecode=2:8300 --change-name=2:"Linux filesystem" "$CFG_DISK"
+
+    wait_for_partitions
+
+    # Also wipe old signatures on the newly created partitions before formatting.
+    wipefs -af "$(efi_part)"  >> "$LOG_FILE" 2>&1 || true
+    wipefs -af "$(root_part)" >> "$LOG_FILE" 2>&1 || true
+
+    log_storage_state
 }
 
 step_format() {
     log "=== FORMATTING ==="
-    run mkfs.fat  -F32 -n "EFI"  "$(efi_part)"
-    run mkfs.ext4 -L   "ROOT"    "$(root_part)"
+
+    wait_for_partitions
+
+    run mkfs.fat -F32 -n EFI "$(efi_part)"
+    run mkfs.ext4 -F -L ROOT "$(root_part)"
+
+    # Give the kernel a moment to reread the new filesystem metadata.
+    sync
+    udevadm settle >> "$LOG_FILE" 2>&1 || true
+    sleep 1
+
+    log_storage_state
 }
 
 step_mount() {
     log "=== MOUNTING ==="
-    run mount "$(root_part)" /mnt
+
+    wait_for_partitions
+
+    mkdir -p /mnt
+    umount -R /mnt >> "$LOG_FILE" 2>&1 || true
+
+    if ! mount -t ext4 -o defaults "$(root_part)" /mnt >> "$LOG_FILE" 2>&1; then
+        loge "Failed to mount root partition $(root_part) as ext4"
+        log_storage_state
+        return 1
+    fi
+
     mkdir -p /mnt/boot
-    run mount "$(efi_part)"  /mnt/boot
+
+    if ! mount -t vfat -o defaults "$(efi_part)" /mnt/boot >> "$LOG_FILE" 2>&1; then
+        loge "Failed to mount EFI partition $(efi_part) as vfat"
+        log_storage_state
+        return 1
+    fi
+
+    log_storage_state
+}
+
+step_update_mirrors() {
+    log "=== MIRROR UPDATE ==="
+
+    if ! ping -c 1 -W 5 archlinux.org >> "$LOG_FILE" 2>&1; then
+        loge "No internet connection while updating mirrors"
+        return 1
+    fi
+
+    pacman -Sy --noconfirm >> "$LOG_FILE" 2>&1 || true
+
+    if ! command -v reflector >> "$LOG_FILE" 2>&1; then
+        pacman -S --needed --noconfirm reflector >> "$LOG_FILE" 2>&1 || true
+    fi
+
+    if command -v reflector >> "$LOG_FILE" 2>&1; then
+        reflector \
+            --country Norway \
+            --country Germany \
+            --protocol https \
+            --latest 20 \
+            --sort rate \
+            --save /etc/pacman.d/mirrorlist >> "$LOG_FILE" 2>&1 || {
+                loge "Reflector failed, continuing with existing mirrorlist"
+                return 0
+            }
+    else
+        loge "Reflector unavailable, continuing with existing mirrorlist"
+    fi
+
+    return 0
 }
 
 step_pacstrap() {
     log "=== PACSTRAP BASE ==="
+
     pacman -Sy --noconfirm >> "$LOG_FILE" 2>&1 || true
+
     # shellcheck disable=SC2086
     run pacstrap /mnt $BASE_PACKAGES
+
     log "RUN: genfstab -U /mnt >> /mnt/etc/fstab"
+    : > /mnt/etc/fstab
     if ! genfstab -U /mnt >> /mnt/etc/fstab 2>> "$LOG_FILE"; then
         loge "Command failed: genfstab"
         return 1
     fi
+
     if [[ ! -s /mnt/etc/fstab ]]; then
         loge "Generated fstab is empty"
+        log_storage_state
         return 1
     fi
+
+    log "Generated fstab:"
+    cat /mnt/etc/fstab >> "$LOG_FILE" 2>&1 || true
 }
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  SYSTEM CONFIGURATION
+# ─────────────────────────────────────────────────────────────────────────────
 
 step_configure() {
     log "=== SYSTEM CONFIGURATION ==="
@@ -1042,56 +1202,56 @@ screen_install() {
     log "Installation started at $(date)"
     log "Config: user=$CFG_USERNAME host=$CFG_HOSTNAME disk=$CFG_DISK tz=$CFG_TIMEZONE locale=$CFG_LOCALE keymap=$CFG_KEYMAP hyperv=$CFG_HYPERV"
 
-    local gpu_label="NVIDIA RTX 5090 drivers (DKMS)"
-    [[ "$CFG_HYPERV" == "yes" ]] && gpu_label="Hyper-V guest drivers"
+    local gpu_label="NVIDIA driver setup"
+    [[ "$CFG_HYPERV" == "yes" ]] && gpu_label="Hyper-V guest setup"
 
     (
         set -e
+        RUN_CONTEXT="gauge"
 
-        gauge_update  2  "Partitioning ${CFG_DISK}..."
+        gauge_update  2  "Preparing disk ${CFG_DISK}"
         step_partition
 
-        gauge_update  6  "Formatting partitions..."
+        gauge_update  7  "Formatting EFI and root partitions"
         step_format
 
-        gauge_update  9  "Mounting partitions..."
+        gauge_update 11  "Mounting new system"
         step_mount
 
-        gauge_update 12  "Updating mirrors (reflector)..."
-        reflector --country Norway,Germany --sort rate \
-            --save /etc/pacman.d/mirrorlist >> "$LOG_FILE" 2>&1 || true
+        gauge_update 14  "Updating Arch mirrors"
+        step_update_mirrors
 
-        gauge_update 15  "Installing base system (pacstrap)..."
+        gauge_update 18  "Installing base system"
         step_pacstrap
 
-        gauge_update 35  "Configuring system (locale, bootloader, users)..."
+        gauge_update 38  "Configuring bootloader, locale and users"
         step_configure
 
-        gauge_update 48  "Installing ${gpu_label}..."
+        gauge_update 50  "${gpu_label}"
         step_nvidia
 
-        gauge_update 57  "Installing GNOME 50+ desktop..."
+        gauge_update 60  "Installing GNOME desktop"
         step_desktop
 
-        gauge_update 70  "Installing applications..."
+        gauge_update 72  "Installing applications"
         step_applications
 
-        gauge_update 80  "Applying system optimisations..."
+        gauge_update 82  "Applying system optimisations"
         step_amd_optimise
 
-        gauge_update 83  "Configuring firewall..."
+        gauge_update 86  "Configuring firewall"
         step_firewall
 
-        gauge_update 90  "Creating user scripts and guides..."
+        gauge_update 91  "Creating user scripts and guides"
         step_user_scripts
 
-        gauge_update 93  "Installing AUR helper and packages..."
+        gauge_update 95  "Installing AUR helper and selected AUR packages"
         step_aur
 
-        gauge_update 98  "Final sync..."
+        gauge_update 98  "Syncing filesystem"
         sync
 
-        gauge_update 100 "Installation complete!"
+        gauge_update 100 "Installation complete"
         log "Installation finished at $(date)"
 
     ) | dialog \
@@ -1099,15 +1259,18 @@ screen_install() {
         --backtitle "$BACKTITLE" \
         --title " Installing Arch Linux " \
         --gauge \
-"
-  Disk    : ${CFG_DISK}
-  Log     : ${LOG_FILE}
+"Installing Arch Linux
 
-  This will take 15–40 minutes.  Do not interrupt.
-" \
-        10 72 0
+Disk: ${CFG_DISK}
+Log : ${LOG_FILE}
+
+This can take 15 to 40 minutes.
+Do not power off the machine." \
+        13 74 0
 
     local install_rc=${PIPESTATUS[0]}
+    RUN_CONTEXT="normal"
+
     if [[ $install_rc -ne 0 ]]; then
         loge "Installation aborted with exit code ${install_rc}"
         return "$install_rc"

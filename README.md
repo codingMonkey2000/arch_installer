@@ -157,4 +157,26 @@ less arch-install-tui.sh
 The installer is destructive. It partitions and formats the selected target disk.
 
 Do not run it on your main system unless you are sure you selected the correct disk and have backups.
-::: 
+:::
+
+## Current fixed version
+
+This repository version includes fixes for:
+
+* Hyper-V password entry by using separate password dialogs instead of mixed form fields.
+* Timezone selection loop by using a simple menu with manual entry.
+* Mirror update reliability by installing or skipping reflector safely.
+* Partition reread timing by waiting for udev and partition nodes before formatting and mounting.
+* Mount reliability by explicitly mounting root as ext4 and EFI as vfat.
+* Cleaner installation progress text in the dialog gauge.
+* Better failure handling so failed install commands stop the installer instead of pretending success.
+
+Run from the Arch ISO:
+
+```bash
+pacman -Sy --noconfirm git dialog
+git clone https://github.com/codingMonkey2000/arch_installer.git
+cd arch_installer
+chmod +x arch-install-tui.sh
+./arch-install-tui.sh
+```
