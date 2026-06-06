@@ -1,90 +1,160 @@
-Arch Installer
-Custom Arch Linux installer script for a GNOME desktop setup with NVIDIA drivers and optional Secure Boot support.
-> ⚠️ **Danger:** this installer deletes all partitions on the disk you select. Back up anything important before running it.
-Important: where this command works
-The commands below are intended to be run from the official Arch Linux live ISO after booting into the installer environment.
-They require `pacman`, which is normally available on the Arch ISO. If `pacman` is not found, you are probably not in the Arch live ISO. Reboot into the official Arch ISO first.
-Quick check:
+# Arch Installer
+
+A custom Arch Linux installer with a terminal based `dialog` interface and an optional HTML preview.
+
+This installer is designed to be run from the official Arch Linux live ISO.
+
+> Warning
+> This installer will erase the selected disk completely. Do not run it on a system or disk that contains data you want to keep.
+
+## What this does
+
+The installer creates a fresh Arch Linux installation with:
+
+* GNOME desktop
+* systemd boot
+* NetworkManager
+* NVIDIA driver support
+* AMD microcode
+* Norwegian keyboard layout
+* Optional Secure Boot setup using `sbctl`
+* Optional development tools
+* Optional AUR helper and extra applications
+
+The real installer is:
+
+```bash
+arch-install-tui.sh
+```
+
+The HTML file is only a visual preview. It does not install Arch Linux by itself.
+
+## Requirements
+
+You should boot from the official Arch Linux ISO.
+
+Before running the installer, check that you are in the Arch live environment:
+
 ```bash
 command -v pacman
 cat /etc/os-release
 ```
-You should see `pacman` and an Arch Linux environment.
-Recommended way to run from GitHub
-Boot the official Arch Linux ISO, connect to the internet, then run:
+
+If `pacman` is missing, you are not in the Arch ISO or an Arch based live environment. Reboot into the official Arch Linux ISO before continuing.
+
+Recommended setup:
+
+* UEFI boot mode
+* Ethernet connection
+* Empty target disk or a disk you are ready to wipe
+* Secure Boot disabled during installation
+* Internet access
+
+## Run directly from GitHub
+
+From the Arch ISO terminal, run:
+
 ```bash
 pacman -Sy --noconfirm git dialog
-
 git clone https://github.com/codingMonkey2000/arch_installer.git
 cd arch_installer
-
 chmod +x arch-install-tui.sh
 ./arch-install-tui.sh
 ```
-One-line version
-Use this only if you are comfortable running the installer directly after cloning:
+
+One line version:
+
 ```bash
 pacman -Sy --noconfirm git dialog && git clone https://github.com/codingMonkey2000/arch_installer.git && cd arch_installer && chmod +x arch-install-tui.sh && ./arch-install-tui.sh
 ```
-Safer review-before-run method
-This lets you inspect the script before executing it:
+
+## HTML preview behavior
+
+The repository includes:
+
+```text
+arch-install-preview.html
+```
+
+When the installer starts, it tries to open the HTML preview first.
+
+This only works if a graphical browser and display session are available.
+
+For example, it may open if you run it from a graphical Linux desktop with:
+
+* Firefox
+* Chromium
+* Brave
+* `xdg-open`
+
+On the normal Arch ISO terminal, there is usually no graphical display and no browser. In that case, the installer will not load the HTML graphic visually. It should show the preview location or URL and continue with the real terminal installer.
+
+The HTML preview is not required for installation.
+
+## Permission denied
+
+If you get:
+
+```text
+Permission denied
+```
+
+make the script executable:
+
 ```bash
-pacman -Sy --noconfirm git dialog
-
-git clone https://github.com/codingMonkey2000/arch_installer.git
-cd arch_installer
-
-less arch-install-tui.sh
 chmod +x arch-install-tui.sh
 ./arch-install-tui.sh
 ```
-Alternative: run without `chmod`
-If you get `permission denied`, run it through Bash directly:
+
+Or run it directly with Bash:
+
 ```bash
 bash arch-install-tui.sh
 ```
-If `pacman` is not installed
-This installer is not meant to be launched from Windows, Ubuntu, Debian, Fedora, macOS, or a normal installed Linux desktop.
-If this fails:
-```bash
-pacman -Sy --noconfirm git dialog
+
+## pacman not found
+
+If you get:
+
+```text
+pacman: command not found
 ```
-then do this instead:
-Download the official Arch Linux ISO.
-Boot your PC or VM from that ISO.
-Connect to the internet.
-Run the GitHub commands again from the Arch live shell.
-Do not try to replace `pacman` with `apt`, `dnf`, `brew`, or another package manager. The script uses Arch installation tools such as `pacstrap`, `arch-chroot`, `genfstab`, `mkinitcpio`, and `bootctl`.
-HTML preview
-The file `arch-install-preview.html` is only a visual preview/mockup of the installer screens.
-It does not install Arch Linux and should not be run as the installer. Open it in a browser only if you want to preview the look and flow of the TUI.
-The real installer is:
-```bash
-arch-install-tui.sh
+
+you are not running from the Arch Linux ISO.
+
+Boot the official Arch ISO, then try again.
+
+## Installation log
+
+During installation, logs are written to:
+
+```text
+/tmp/arch-install.log
 ```
-Requirements
-Official Arch Linux live ISO
-UEFI boot mode
-Ethernet or working internet connection
-Root shell, which the Arch ISO gives you by default
-A target disk you are okay with completely erasing
-Notes
-The installer uses `dialog` for the terminal user interface.
-The script is designed for a modern GNOME setup with NVIDIA support.
-Secure Boot setup should be treated carefully. Read the prompts before enabling it.
-If installation fails, check the log:
+
+If something fails, check:
+
 ```bash
-cat /tmp/arch-install.log
+less /tmp/arch-install.log
 ```
-Fixing the old command
-Do not use this broken command:
+
+## Secure Boot note
+
+Secure Boot should normally be disabled during the installation.
+
+If Secure Boot support is selected, the installer prepares an `sbctl` based setup. After the first boot into the installed system, follow the generated post install instructions before enabling Secure Boot again in BIOS.
+
+## Important safety notes
+
+This project is a personal custom installer.
+
+Review the script before running it:
+
 ```bash
-pacman -Sy dialog chmod +x arch-install-tui.sh./arch-install-tui.sh
+less arch-install-tui.sh
 ```
-It mixes package installation, permission changes, and script execution into one invalid command.
-Use this instead:
-```bash
-pacman -Sy --noconfirm git dialog
-chmod +x arch-install-tui.sh
-./arch-install-tui.sh
-```
+
+The installer is destructive. It partitions and formats the selected target disk.
+
+Do not run it on your main system unless you are sure you selected the correct disk and have backups.
+::: 
